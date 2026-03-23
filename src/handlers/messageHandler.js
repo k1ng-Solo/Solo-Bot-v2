@@ -90,7 +90,7 @@ async function chatWithAI(text) {
     return result.response.text();
   } catch (e) {
     console.log("GEMINI ERROR:", e.message);//This shows the Real error in railway logs
-    return'Glitch: ${e.message.slice(0,50)}';//This sends the error to ur whatsapp
+    return`Glitch: ${e.message.slice(0,50)}`;//This sends the error to ur whatsapp
   }
 }
 
