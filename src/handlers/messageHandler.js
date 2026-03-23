@@ -4,7 +4,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // AI CONFIGURATION
 // Add your key in Railway Variables as GEMINI_KEY
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY || "YOUR_KEY_HERE");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
 const model = genAI.getGenerativeModel({ 
     model: "gemini-1.5-flash",
     systemInstruction: "You are a helpful, street-smart business assistant. You speak professional English but understand and can reply in Nigerian Pidgin/Slang when appropriate (like 'how far', 'wetin dey sup'). Be concise."
