@@ -89,7 +89,8 @@ async function chatWithAI(text) {
     const result = await model.generateContent(text);
     return result.response.text();
   } catch (e) {
-    return "I'm having a small glitch in my brain. Try again in a bit!";
+    console.log("GEMINI ERROR:", e.message);//This shows the Real error in railway logs
+    return'Glitch: ${e.message.slice(0,50)}';//This sends the error to ur whatsapp
   }
 }
 
