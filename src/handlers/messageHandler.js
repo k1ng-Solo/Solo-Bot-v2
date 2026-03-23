@@ -1,9 +1,17 @@
 const fetch = require('node-fetch'); 
 const translate = require('google-translate-api-x');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+// AI CONFIGURATION
+// Add your key in Railway Variables as GEMINI_KEY
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY || "YOUR_KEY_HERE");
+const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash",
+    systemInstruction: "You are a helpful, street-smart business assistant. You speak professional English but understand and can reply in Nigerian Pidgin/Slang when appropriate (like 'how far', 'wetin dey sup'). Be concise."
+});
 
 /**
- * PROFESSIONAL BUSINESS ASSISTANT v4.0
- * Features: Payments, Logistics, Translation, and Rates
+ * PROFESSIONAL BUSINESS ASSISTANT v5.0 (AI ENHANCED)
  */
 async function handleMessage(msg, sock) {
   try {
@@ -17,96 +25,72 @@ async function handleMessage(msg, sock) {
     const isGroup = remoteJid.endsWith('@g.us');
     const sender = msg.key.participant || remoteJid;
 
-    // 1. AUTO-SAVE / GREETING (Neutral)
+    // 1. GREETING (Neutral)
     if (!isGroup && (text === 'hi' || text === 'hello' || text === 'hey')) {
-        await sock.sendMessage(remoteJid, { 
-            text: `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Please state your name and how we can help you.\n\nType *.menu* for all commands.` 
+        return await sock.sendMessage(remoteJid, { 
+            text: `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Type *.menu* for all commands or just talk to me!` 
         });
-        return;
     }
 
     // 2. PAYMENT PROOF DETECTION
     if (isImage && (text.includes('paid') || text.includes('proof') || text.includes('alert') || text.includes('done'))) {
-        await sock.sendMessage(remoteJid, { text: "✅ *Payment Proof Received.*\n\nWaiting for manual verification by the admin. Please hold." });
-        
+        await sock.sendMessage(remoteJid, { text: "✅ *Payment Proof Received.*\n\nWaiting for manual verification by the admin." });
         const ownerNum = process.env.OWNER_NUMBER + "@s.whatsapp.net";
-        await sock.sendMessage(ownerNum, { 
-            text: `🚨 *VERIFICATION ALERT:* A customer (wa.me/${sender.split('@')[0]}) has sent a payment screenshot. Please check.` 
+        return await sock.sendMessage(ownerNum, { 
+            text: `🚨 *VERIFICATION ALERT:* A customer (wa.me/${sender.split('@')[0]}) sent a payment screenshot.` 
         });
-        return;
     }
 
-    // 3. NAIJA SLANGS (Street-Smart Response)
-    const wasSlang = await handleNaijaSlang(text, remoteJid, sock);
-    if (wasSlang) return;
-
-    // 4. THE COMMAND MENU (Professional Layout)
+    // 3. THE COMMAND MENU
     if (text === '.menu' || text === 'help' || text === 'menu') {
-      let menuMsg = `*🛠️ BUSINESS ASSISTANT v4.0*\n\n`;
-      menuMsg += `*💰 FINANCE*\n• \`.pay\` - Get Account Details\n• \`.rate\` - Check USD/NGN Rate\n\n`;
-      menuMsg += `*🌍 TOOLS*\n• \`.tr [lang] [text]\` - Universal Translator\n• \`.track\` - Delivery/Logistics Info\n\n`;
-      
-      if (isGroup) {
-        menuMsg += `*🛡️ ADMIN TOOLS*\n• \`.tagall\` | \`.kick\` | \`.promote\`\n\n`;
-      }
-      
-      menuMsg += `*📞 CONTACT*\n• \`.owner\` - Talk to the Boss\n\n`;
-      menuMsg += `_Reliability first. We no go carry last!_ 🏃‍♂️`;
+      let menuMsg = `*🛠️ BUSINESS ASSISTANT v5.0*\n\n`;
+      menuMsg += `*💰 FINANCE*\n• \`.pay\` - Get Account Details\n• \`.rate\` - USD/NGN Rate\n\n`;
+      menuMsg += `*🌍 TOOLS*\n• \`.tr [lang] [text]\` - Translator\n• \`.track\` - Logistics\n\n`;
+      menuMsg += `*🤖 AI CHAT*\nJust send any message to talk to me!\n\n_Reliability first. We no go carry last!_`;
       return await sock.sendMessage(remoteJid, { text: menuMsg });
     }
 
-    // 5. BANK ACCOUNT INFO (.pay)
-    if (text === '.pay' || text === '.account' || text === 'payment') {
-        let payMsg = `*💳 OFFICIAL PAYMENT INFO*\n\n`;
-        payMsg += `🏦 *Bank:* [ENTER BANK NAME HERE]\n`;
-        payMsg += `🔢 *Account:* [ENTER ACCOUNT NUMBER]\n`;
-        payMsg += `👤 *Name:* [ENTER ACCOUNT NAME]\n\n`;
-        payMsg += `_Once payment is made, send the screenshot/receipt here for confirmation._ ✅`;
+    // 4. BANK ACCOUNT INFO (.pay)
+    if (text === '.pay' || text === '.account') {
+        let payMsg = `*💳 PAYMENT INFO*\n\n🏦 *Bank:* [BANK NAME]\n🔢 *Acc:* [NUMBER]\n👤 *Name:* [NAME]`;
         return await sock.sendMessage(remoteJid, { text: payMsg });
     }
 
-    // 6. DELIVERY / LOGISTICS INFO
-    if (text === '.track' || text === 'delivery') {
-        return await sock.sendMessage(remoteJid, { 
-            text: `🚚 *LOGISTICS STATUS*\n\nStandard Delivery: 1-5 working days depending on location.\n\nPlease provide your *Order ID* for a real-time update.` 
-        });
-    }
-
-    // 7. UNIVERSAL TRANSLATOR (.tr [lang] [text])
-    if (text.startsWith('.tr')) {
-      const args = body.split(' '); 
-      if (args.length < 3) return await sock.sendMessage(remoteJid, { text: "❌ Format: \`.tr [language] [text]\` \nExample: \`.tr igbo How are you?\`" });
-      const targetLang = args[1].toLowerCase();
-      const textToTranslate = args.slice(2).join(' ');
-      try {
-        const res = await translate(textToTranslate, { to: targetLang });
-        return await sock.sendMessage(remoteJid, { text: `*🌍 TRANSLATION [${targetLang.toUpperCase()}]*\n\n${res.text}` });
-      } catch (e) { return await sock.sendMessage(remoteJid, { text: "💔 Language error! Check spelling." }); }
-    }
-
-    // 8. DOLLAR RATE (.rate)
+    // 5. DOLLAR RATE (.rate)
     if (text === '.rate') {
-      try {
         const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
         const data = await response.json();
         const rate = (data.rates.NGN + 250).toFixed(2); 
-        return await sock.sendMessage(remoteJid, { text: `*📊 CURRENT RATE*\n\n1 USD = ₦${rate} (Market Rate)` });
-      } catch (e) { return await sock.sendMessage(remoteJid, { text: "Network error fetching rates." }); }
+        return await sock.sendMessage(remoteJid, { text: `*📊 CURRENT RATE*\n\n1 USD = ₦${rate}` });
     }
 
-  } catch (err) { console.error(err); }
+    // 6. UNIVERSAL TRANSLATOR (.tr)
+    if (text.startsWith('.tr')) {
+      const args = body.split(' '); 
+      if (args.length < 3) return await sock.sendMessage(remoteJid, { text: "❌ Use: .tr igbo How are you?" });
+      const res = await translate(args.slice(2).join(' '), { to: args[1].toLowerCase() });
+      return await sock.sendMessage(remoteJid, { text: `*🌍 TRANSLATION*\n\n${res.text}` });
+    }
+
+    // ==========================================
+    // 7. THE AI "BRAIN" (CATCH-ALL)
+    // ==========================================
+    // If no command above matched, and it's not a group (or bot is tagged)
+    if (body.length > 1 && !text.startsWith('.')) {
+        const aiResponse = await chatWithAI(body);
+        return await sock.sendMessage(remoteJid, { text: aiResponse });
+    }
+
+  } catch (err) { console.error("Handler Error:", err); }
 }
 
-async function handleNaijaSlang(text, remoteJid, sock) {
-    if (text.includes('how far') || text.includes('wetin dey sup')) {
-      await sock.sendMessage(remoteJid, { text: "Everything clear. How I fit help you today?" });
-      return true;
-    }
-    if (text.includes('oshey') || text.includes('adupe')) {
-      await sock.sendMessage(remoteJid, { text: "Respect! 🫡 We dey for you." });
-      return true;
-    }
-    return false;
+async function chatWithAI(text) {
+  try {
+    const result = await model.generateContent(text);
+    return result.response.text();
+  } catch (e) {
+    return "I'm having a small glitch in my brain. Try again in a bit!";
+  }
 }
 
 module.exports = { handleMessage };
