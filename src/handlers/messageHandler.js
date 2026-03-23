@@ -7,8 +7,8 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
 const model = genAI.getGenerativeModel({ 
     model: "gemini-1.5-flash",
-    systemInstruction: "You are a helpful, street-smart business assistant. You speak professional English but understand and can reply in Nigerian Pidgin/Slang when appropriate (like 'how far', 'wetin dey sup'). Be concise."
-});
+    systemInstruction: "You are a helpful, street-smart business assistant. Speak professional English but understand Nigerian Pidgin."
+}, { apiBaseUrl: "https://gateway.ai.cloudflare.com/v1/public/google-gemini/v1" });
 
 /**
  * PROFESSIONAL BUSINESS ASSISTANT v5.0 (AI ENHANCED)
