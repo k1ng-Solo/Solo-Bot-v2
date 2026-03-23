@@ -94,7 +94,7 @@ class WhatsAppBot {
       });
 
       // Set socket in handlers
-      // messageHandler.setSocket(this.sock);
+      messageHandler.sock = this.sock;
 
       // Handle connection events
       this.sock.ev.on('connection.update', async (update) => {
