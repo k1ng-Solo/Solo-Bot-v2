@@ -1,0 +1,21 @@
+whatsapp-bot-business/
+├── src/
+│   ├── config/
+│   │   └── business.js          # Business customization file
+│   ├── handlers/
+│   │   ├── messageHandler.js    # Main message processing
+│   │   ├── commandHandler.js    # Menu commands (1,2,3)
+│   │   └── orderHandler.js      # Order capture system
+│   ├── utils/
+│   │   ├── sessionManager.js    # User session tracking
+│   │   ├── logger.js            # Console logging utility
+│   │   └── responses.js         # Message templates
+│   ├── services/
+│   │   └── notificationService.js # Owner notifications
+│   └── bot.js                   # Main entry point
+├── auth/                        # WhatsApp session storage (auto-created)
+├── logs/                        # Log files (auto-created)
+├── .env.example                 # Environment variables template
+├── .gitignore                   # Git ignore rules
+├── package.json                 # Dependencies
+└── README.md                    # Setup instructions
