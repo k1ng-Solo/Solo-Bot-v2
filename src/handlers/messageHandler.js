@@ -7,6 +7,7 @@ const translate = require('google-translate-api-x');
  */
 async function handleMessage(msg, sock) {
   try {
+    if (!msg.message) return;
     const body = msg.message?.conversation || 
                  msg.message?.extendedTextMessage?.text || 
                  msg.message?.imageMessage?.caption || "";

@@ -109,7 +109,7 @@ class WhatsAppBot {
         if (m.type === 'notify') {
           for (const msg of m.messages) {
             messageHandler.sock = this.sock;
-            await messageHandler.handleMessage(msg);
+            await messageHandler.handleMessage(msg, this.sock);
           }
         }
       });
