@@ -1,52 +1,59 @@
 const fs = require('fs');
 const path = require('path');
 
-const dataPath = path.join(__dirname, '../data/products.json');
+// File to store products
+const memoryFile = path.join(__dirname, 'products.json');
 
-// Ensure the data folder and file exist
-if (!fs.existsSync(path.dirname(dataPath))) fs.mkdirSync(path.dirname(dataPath), { recursive: true });
-if (!fs.existsSync(dataPath)) fs.writeFileSync(dataPath, JSON.stringify([]));
+// Load existing memory or create empty
+let products = [];
+if (fs.existsSync(memoryFile)) {
+    try {
+        products = JSON.parse(fs.readFileSync(memoryFile));
+    } catch (err) {
+        console.error("Error reading memory file, starting fresh:", err);
+        products = [];
+    }
+} else {
+    fs.writeFileSync(memoryFile, JSON.stringify(products, null, 2));
+}
 
 /**
  * Add a product to memory
  * @param {string} name - Product name
- * @param {string} type - 'image' or 'video'
- * @param {string} file - URL or file path
- * @param {number} price - Product price in NGN
+ * @param {string} type - "image" or "video"
+ * @param {string} file - File path or URL
+ * @param {number} price - Price in Naira
  */
 function addProduct(name, type, file, price) {
-  const products = getAllProducts();
-  products.push({ name, type, file, price });
-  fs.writeFileSync(dataPath, JSON.stringify(products, null, 2));
+    const newProduct = { name, type, file, price };
+    products.push(newProduct);
+    saveMemory();
 }
 
 /**
  * Get products by name and optional price range
- * @param {string} name - Product name
- * @param {number} minPrice - Minimum price (default 0)
- * @param {number} maxPrice - Maximum price (default Infinity)
- * @returns Array of products
+ * @param {string} name - Name to search
+ * @param {number} minPrice - Minimum price
+ * @param {number} maxPrice - Maximum price
+ * @returns {Array} - Array of matching products
  */
 function getProduct(name, minPrice = 0, maxPrice = Infinity) {
-  const products = getAllProducts();
-  return products.filter(p => 
-    p.name.toLowerCase() === name.toLowerCase() &&
-    p.price >= minPrice &&
-    p.price <= maxPrice
-  );
+    return products.filter(p => 
+        p.name.toLowerCase().includes(name.toLowerCase()) &&
+        p.price >= minPrice &&
+        p.price <= maxPrice
+    );
 }
 
 /**
- * Return all products
+ * Save memory to file
  */
-function getAllProducts() {
-  try {
-    const raw = fs.readFileSync(dataPath);
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error('Memory Error:', err);
-    return [];
-  }
+function saveMemory() {
+    try {
+        fs.writeFileSync(memoryFile, JSON.stringify(products, null, 2));
+    } catch (err) {
+        console.error("Error saving memory:", err);
+    }
 }
 
-module.exports = { addProduct, getProduct, getAllProducts };
+module.exports = { addProduct, getProduct };
