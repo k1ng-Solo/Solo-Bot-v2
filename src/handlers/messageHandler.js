@@ -20,6 +20,11 @@ async function handleMessage(msg, sock) {
                  msg.message?.extendedTextMessage?.text || 
                  msg.message?.imageMessage?.caption || "";
     const text = body.toLowerCase().trim();
+    const businesskeywords = ['pay', 'account', 'rate', 'tr', 'track', 'paid', 'proof', 'alert', 'done','hi', 'hello', 'hey', '.menu', 'help', 'menu'];
+    
+    const isBusiness = businesskeywords.some(word => text.includes(word));
+    if (!isGroup && !isBusiness) {return; // Ignore non-business messages to save resources
+    }
     const isImage = !!msg.message?.imageMessage;
     const remoteJid = msg.key.remoteJid;
     const isGroup = remoteJid.endsWith('@g.us');

@@ -4,7 +4,7 @@ const {
   useMultiFileAuthState,
   fetchLatestBaileysVersion 
 } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
+
 const path = require('path');
 const fs = require('fs-extra');
 
@@ -30,93 +30,86 @@ class WhatsAppBot {
     this.maxRetries = 5;
   }
 
-  /**
-   * Initialize the bot
-   */
   async start() {
     try {
       logger.info('🚀 Starting WhatsApp Business Bot...');
-      logger.info(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
-
-      // Check required environment variables
       this.validateConfig();
-
-      // Initialize WhatsApp connection
       await this.connect();
-
     } catch (error) {
       logger.error('Failed to start bot:', error);
       process.exit(1);
     }
   }
 
-  /**
-   * Validate configuration
-   */
   validateConfig() {
     const required = ['OWNER_NUMBER'];
     const missing = required.filter(key => !process.env[key]);
 
     if (missing.length > 0) {
       logger.warn(`⚠️ Missing environment variables: ${missing.join(', ')}`);
-      logger.warn('Please copy .env.example to .env and fill in your details');
+      logger.warn('Please check your .env file');
     }
   }
 
-  /**
-   * Connect to WhatsApp
-   */
   async connect() {
     try {
-      // Get latest Baileys version
-      const { version, isLatest } = await fetchLatestBaileysVersion();
-      logger.info(`📱 Using WhatsApp Web v${version.join('.')}, Latest: ${isLatest}`);
+      const { version } = await fetchLatestBaileysVersion();
 
-      // Load authentication state
       const { state, saveCreds } = await useMultiFileAuthState(
         path.join(authDir, process.env.SESSION_NAME || 'business_session')
       );
 
-      // Create socket connection
       this.sock = makeWASocket({
         version,
-        logger: logger.child({ level: 'silent' }), // Suppress Baileys internal logs
-        printQRInTerminal: true,
+        logger: logger.child({ level: 'silent' }),
+        printQRInTerminal: false,
         auth: state,
-        browser: ['Business Bot', 'Chrome', '1.0.0'],
-        generateHighQualityLinkPreview: true,
-        syncFullHistory: false, // Don't load old messages
+        browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        syncFullHistory: false,
         markOnlineOnConnect: true,
-        keepAliveIntervalMs: 30000,
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 60000,
-        retryRequestDelayMs: 250
       });
 
-      // Set socket in handlers
-      messageHandler.sock = this.sock;
+      // =========================
+      // PAIRING CODE (NO QR)
+      // =========================
+      if (!state.creds.registered) {
+        const phoneNumber = process.env.OWNER_NUMBER;
 
-      // Handle connection events
+        setTimeout(async () => {
+          try {
+            const code = await this.sock.requestPairingCode(phoneNumber);
+
+            console.log('\n' + '='.repeat(35));
+            console.log(`🔑 YOUR PAIRING CODE: ${code}`);
+            console.log('='.repeat(35) + '\n');
+
+            logger.info('Enter this code on WhatsApp → Linked Devices → Link with phone number');
+          } catch (err) {
+            logger.error('Failed to request pairing code:', err);
+          }
+        }, 3000);
+      }
+
+      // Save creds
+      this.sock.ev.on('creds.update', saveCreds);
+
+      // Connection update
       this.sock.ev.on('connection.update', async (update) => {
         await this.handleConnectionUpdate(update);
       });
 
-      // Handle credentials update
-      this.sock.ev.on('creds.update', saveCreds);
-
-      // Handle incoming messages
+      // Message listener
       this.sock.ev.on('messages.upsert', async (m) => {
-        if (m.type === 'notify') {
-          for (const msg of m.messages) {
+        if (m.type !== 'notify') return;
+
+        for (const msg of m.messages) {
+          try {
             messageHandler.sock = this.sock;
             await messageHandler.handleMessage(msg, this.sock);
+          } catch (err) {
+            logger.error('Message handling error:', err);
           }
         }
-      });
-
-      // Handle errors
-      this.sock.ev.on('error', (error) => {
-        logger.error('Socket error:', error);
       });
 
     } catch (error) {
@@ -125,68 +118,49 @@ class WhatsAppBot {
     }
   }
 
-  /**
-   * Handle connection status updates
-   */
   async handleConnectionUpdate(update) {
-    const { connection, lastDisconnect, qr } = update;
+    const { connection, lastDisconnect } = update;
 
-    // Show QR code
-    if (qr) {
-      logger.info('📲 Scan the QR code above with WhatsApp on your phone');
-      qrcode.generate(qr, { small: true });
-    }
-
-    // Connection established
     if (connection === 'open') {
       this.connectionAttempts = 0;
       this.isReconnecting = false;
-      
-      const userInfo = this.sock.user;
-      logger.info(`✅ Bot connected successfully!`);
-      logger.info(`📱 Number: ${userInfo.id.split(':')[0]}`);
-      logger.info(`👤 Name: ${userInfo.name}`);
-      
-      // Notify owner that bot is online
-      await notificationService.sendSystemStatus('🟢 ONLINE - Bot is ready to receive messages');
-      
-      logger.info('🤖 Bot is now listening for messages...');
+
+      logger.info(`✅ Bot connected! Logged in as: ${this.sock.user?.name || "Unknown"}`);
+
+      try {
+        await notificationService.sendSystemStatus('🟢 ONLINE - Bot is ready');
+      } catch (e) {}
     }
 
-    // Connection closed
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
-      logger.warn(`⚠️ Connection closed. Status: ${statusCode}`);
 
       if (statusCode === DisconnectReason.loggedOut) {
-        logger.error('❌ Logged out. Please delete auth folder and scan QR again.');
+        logger.error('❌ Logged out. Delete auth folder and restart.');
         process.exit(0);
       }
 
-      if (shouldReconnect) {
-        await this.handleReconnect();
-      }
+      await this.handleReconnect();
     }
   }
 
-  /**
-   * Handle reconnection with exponential backoff
-   */
   async handleReconnect() {
     if (this.isReconnecting) return;
-    
+
     this.isReconnecting = true;
     this.connectionAttempts++;
 
     if (this.connectionAttempts > this.maxRetries) {
-      logger.error(`❌ Max reconnection attempts (${this.maxRetries}) reached. Exiting...`);
+      logger.error('Max reconnect attempts reached.');
       process.exit(1);
     }
 
-    const delay = Math.min(1000 * Math.pow(2, this.connectionAttempts), 30000);
-    logger.info(`🔄 Reconnecting in ${delay/1000}s... (Attempt ${this.connectionAttempts}/${this.maxRetries})`);
+    const delay = Math.min(
+      1000 * Math.pow(2, this.connectionAttempts),
+      30000
+    );
+
+    logger.info(`Reconnecting in ${delay / 1000}s...`);
 
     setTimeout(async () => {
       this.isReconnecting = false;
@@ -195,23 +169,5 @@ class WhatsAppBot {
   }
 }
 
-// Handle process termination
-process.on('SIGINT', async () => {
-  logger.info('👋 Shutting down bot gracefully...');
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  logger.info('👋 Shutting down bot gracefully...');
-  process.exit(0);
-});
-
-// Handle uncaught errors
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', error);
-  process.exit(1);
-});
-
-// Start the bot
 const bot = new WhatsAppBot();
 bot.start();
