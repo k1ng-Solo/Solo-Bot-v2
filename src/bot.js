@@ -1,25 +1,29 @@
 const { 
   default: makeWASocket, 
   DisconnectReason, 
-  useMultiFileAuthState, 
+  useMultiFileAuthState,
   fetchLatestBaileysVersion 
 } = require('@whiskeysockets/baileys');
 const path = require('path');
 const fs = require('fs-extra');
-const { handleMessage } = require('./handlers/messageHandler');
+const logger = require('./utils/logger');
+const messageHandler = require('./handlers/messageHandler');
 const notificationService = require('./services/notificationService');
 require('dotenv').config();
-const logger = require('./utils/logger');
 
-// --- Auth folder ---
+const OWNER_NUMBER = process.env.OWNER_NUMBER || "2347076642500";
+
+// ---------------- Persistent Auth ----------------
 const authDir = path.join(process.cwd(), 'auth');
 fs.ensureDirSync(authDir);
 
+// ---------------- Bot Class ----------------
 class WhatsAppBot {
   constructor() {
     this.sock = null;
     this.isReconnecting = false;
     this.connectionAttempts = 0;
+    this.maxRetries = 5;
   }
 
   async start() {
@@ -29,11 +33,12 @@ class WhatsAppBot {
       await this.connect();
     } catch (err) {
       logger.error('Failed to start bot:', err);
+      process.exit(1);
     }
   }
 
   validateConfig() {
-    const required = ['OWNER_NUMBER', 'GEMINI_KEY'];
+    const required = ['OWNER_NUMBER'];
     const missing = required.filter(key => !process.env[key]);
     if (missing.length > 0) {
       logger.warn(`⚠️ Missing environment variables: ${missing.join(', ')}`);
@@ -49,27 +54,20 @@ class WhatsAppBot {
 
       this.sock = makeWASocket({
         version,
-        auth: state,
         logger: logger.child({ level: 'silent' }),
+        auth: state,
         printQRInTerminal: false,
         browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        syncFullHistory: false,
         markOnlineOnConnect: true,
       });
 
-      notificationService.setSocket(this.sock);
-
-      // 🔐 Pairing Code Login (NO QR)
-      if (!this.sock.authState.creds.registered) {
-        const phoneNumber = process.env.OWNER_NUMBER;
-        const code = await this.sock.requestPairingCode(phoneNumber);
-        logger.info(`📱 Pairing Code: ${code}`);
-      }
-
-      // Messages handler
+      // Message handling
+      messageHandler.sock = this.sock;
       this.sock.ev.on('messages.upsert', async (m) => {
         if (m.type === 'notify') {
           for (const msg of m.messages) {
-            handleMessage(msg, this.sock);
+            await messageHandler.handleMessage(msg, this.sock);
           }
         }
       });
@@ -79,6 +77,7 @@ class WhatsAppBot {
         await this.handleConnectionUpdate(update);
       });
 
+      // Save credentials automatically
       this.sock.ev.on('creds.update', saveCreds);
 
     } catch (err) {
@@ -88,7 +87,7 @@ class WhatsAppBot {
   }
 
   async handleConnectionUpdate(update) {
-    const { connection, lastDisconnect } = update;
+    const { connection, lastDisconnect, qr } = update;
 
     if (connection === 'open') {
       this.connectionAttempts = 0;
@@ -99,24 +98,22 @@ class WhatsAppBot {
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-
       if (statusCode === DisconnectReason.loggedOut) {
         logger.error('❌ Logged out. Delete auth folder and restart.');
-        return;
+        process.exit(0);
       }
-
       await this.handleReconnect();
     }
   }
 
   async handleReconnect() {
     if (this.isReconnecting) return;
-
     this.isReconnecting = true;
     this.connectionAttempts++;
+    if (this.connectionAttempts > this.maxRetries) process.exit(1);
 
     const delay = Math.min(1000 * Math.pow(2, this.connectionAttempts), 30000);
-
+    logger.warn(`⚠️ Attempting reconnect in ${delay / 1000}s...`);
     setTimeout(async () => {
       this.isReconnecting = false;
       await this.connect();
@@ -124,10 +121,6 @@ class WhatsAppBot {
   }
 }
 
+// ---------------- Start Bot ----------------
 const bot = new WhatsAppBot();
 bot.start();
-
-// Railway keep alive
-setInterval(() => {
-  console.log("🟢 Bot still alive");
-}, 30000);
