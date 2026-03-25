@@ -1,40 +1,52 @@
 const fs = require('fs');
 const path = require('path');
 
-// Memory file path
-const memoryFile = path.join(__dirname, 'botMemory.json');
+const dataPath = path.join(__dirname, '../data/products.json');
 
-// Load memory or create empty if missing
-let memory = {};
-if (fs.existsSync(memoryFile)) {
-  memory = JSON.parse(fs.readFileSync(memoryFile, 'utf-8'));
-} else {
-  fs.writeFileSync(memoryFile, JSON.stringify({ products: [] }, null, 2));
-  memory = { products: [] };
-}
+// Ensure the data folder and file exist
+if (!fs.existsSync(path.dirname(dataPath))) fs.mkdirSync(path.dirname(dataPath), { recursive: true });
+if (!fs.existsSync(dataPath)) fs.writeFileSync(dataPath, JSON.stringify([]));
 
-// Save memory to disk
-function saveMemory() {
-  fs.writeFileSync(memoryFile, JSON.stringify(memory, null, 2));
-}
-
-// Add a product
+/**
+ * Add a product to memory
+ * @param {string} name - Product name
+ * @param {string} type - 'image' or 'video'
+ * @param {string} file - URL or file path
+ * @param {number} price - Product price in NGN
+ */
 function addProduct(name, type, file, price) {
-  memory.products.push({ name, type, file, price });
-  saveMemory();
+  const products = getAllProducts();
+  products.push({ name, type, file, price });
+  fs.writeFileSync(dataPath, JSON.stringify(products, null, 2));
 }
 
-// Get products by name and optional price range
+/**
+ * Get products by name and optional price range
+ * @param {string} name - Product name
+ * @param {number} minPrice - Minimum price (default 0)
+ * @param {number} maxPrice - Maximum price (default Infinity)
+ * @returns Array of products
+ */
 function getProduct(name, minPrice = 0, maxPrice = Infinity) {
-  return memory.products.filter(
-    p => p.name.toLowerCase() === name.toLowerCase() && p.price >= minPrice && p.price <= maxPrice
+  const products = getAllProducts();
+  return products.filter(p => 
+    p.name.toLowerCase() === name.toLowerCase() &&
+    p.price >= minPrice &&
+    p.price <= maxPrice
   );
 }
 
-// Optional: delete product if needed
-function deleteProduct(name) {
-  memory.products = memory.products.filter(p => p.name.toLowerCase() !== name.toLowerCase());
-  saveMemory();
+/**
+ * Return all products
+ */
+function getAllProducts() {
+  try {
+    const raw = fs.readFileSync(dataPath);
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('Memory Error:', err);
+    return [];
+  }
 }
 
-module.exports = { addProduct, getProduct, deleteProduct, memory };
+module.exports = { addProduct, getProduct, getAllProducts };

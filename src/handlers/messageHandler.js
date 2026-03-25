@@ -11,7 +11,7 @@ const model = genAI.getGenerativeModel({
 });
 
 /**
- * PROFESSIONAL BUSINESS ASSISTANT v5.1 (AI + MEMORY + BUSINESS)
+ * PROFESSIONAL BUSINESS ASSISTANT v5.2 (AI + MEMORY + BUSINESS)
  */
 async function handleMessage(msg, sock) {
   try {
@@ -28,12 +28,12 @@ async function handleMessage(msg, sock) {
 
     const businesskeywords = ['pay', 'account', 'rate', 'tr', 'track', 'paid', 'proof', 'alert', 'done','hi', 'hello', 'hey', '.menu', 'help', 'menu'];
 
-    // IGNORE GROUPS unless you add them to a whitelist (example)
+    // IGNORE GROUPS unless whitelisted
     const allowedGroups = (process.env.ALLOWED_GROUPS || "").split(","); 
     if (isGroup && !allowedGroups.includes(remoteJid)) return;
 
     const isBusiness = businesskeywords.some(word => text.includes(word));
-    if (!isGroup && !isBusiness) return; // Ignore non-business messages outside groups
+    if (!isGroup && !isBusiness) return;
 
     // 1. GREETING
     if (!isGroup && (text === 'hi' || text === 'hello' || text === 'hey')) {
@@ -53,7 +53,7 @@ async function handleMessage(msg, sock) {
 
     // 3. COMMAND MENU
     if (text === '.menu' || text === 'help' || text === 'menu') {
-      let menuMsg = `*🛠️ BUSINESS ASSISTANT v5.1*\n\n`;
+      let menuMsg = `*🛠️ BUSINESS ASSISTANT v5.2*\n\n`;
       menuMsg += `*💰 FINANCE*\n• \`.pay\` - Get Account Details\n• \`.rate\` - USD/NGN Rate\n\n`;
       menuMsg += `*🌍 TOOLS*\n• \`.tr [lang] [text]\` - Translator\n• \`.track\` - Logistics\n\n`;
       menuMsg += `*🛒 PRODUCTS*\n• \`.add [name] [type] [file] [price]\` - Add Product\n• \`.get [name] [minPrice] [maxPrice]\` - Get Products\n\n`;
@@ -83,7 +83,7 @@ async function handleMessage(msg, sock) {
       return await sock.sendMessage(remoteJid, { text: `*🌍 TRANSLATION*\n\n${res.text}` });
     }
 
-    // 7. ADD PRODUCT (.add name type file price)
+    // 7. ADD PRODUCT (.add)
     if (text.startsWith('.add')) {
       const args = body.split(' ');
       if (args.length < 5) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .add [name] [type:image|video] [filePath] [price]" });
@@ -93,7 +93,7 @@ async function handleMessage(msg, sock) {
       return await sock.sendMessage(remoteJid, { text: `✅ Product ${name} added successfully!` });
     }
 
-    // 8. GET PRODUCT (.get name minPrice maxPrice)
+    // 8. GET PRODUCT (.get)
     if (text.startsWith('.get')) {
       const args = body.split(' ');
       if (args.length < 2) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .get [name] [minPrice] [maxPrice]" });
@@ -111,7 +111,7 @@ async function handleMessage(msg, sock) {
       return;
     }
 
-    // 9. THE AI "BRAIN"
+    // 9. AI "BRAIN" for everything else
     if (body.length > 1 && !text.startsWith('.')) {
         const aiResponse = await chatWithAI(body);
         return await sock.sendMessage(remoteJid, { text: aiResponse });
@@ -122,8 +122,8 @@ async function handleMessage(msg, sock) {
 
 async function chatWithAI(text) {
   try {
-    const result = await model.generateContent(text);
-    return result.response.text();
+    const result = await model.generateMessage({ input: text }); // ✅ Fixed method
+    return result.output_text || "🤖 Sorry, I couldn't process that.";
   } catch (e) {
     console.log("GEMINI ERROR:", e.message);
     return `Glitch: ${e.message.slice(0,50)}`;
