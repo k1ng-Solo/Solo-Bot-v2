@@ -1,9 +1,9 @@
 const fetch = require('node-fetch'); 
 const translate = require('google-translate-api-x');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { getProduct, addProduct } = require('../utils/memory'); // Memory system
 
 // AI CONFIGURATION
-// Add your key in Railway Variables as GEMINI_KEY
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
 const model = genAI.getGenerativeModel({ 
     model: "gemini-1.5-flash",
@@ -11,26 +11,31 @@ const model = genAI.getGenerativeModel({
 });
 
 /**
- * PROFESSIONAL BUSINESS ASSISTANT v5.0 (AI ENHANCED)
+ * PROFESSIONAL BUSINESS ASSISTANT v5.1 (AI + MEMORY + BUSINESS)
  */
 async function handleMessage(msg, sock) {
   try {
     if (!msg.message) return;
+
     const body = msg.message?.conversation || 
                  msg.message?.extendedTextMessage?.text || 
                  msg.message?.imageMessage?.caption || "";
     const text = body.toLowerCase().trim();
-    const businesskeywords = ['pay', 'account', 'rate', 'tr', 'track', 'paid', 'proof', 'alert', 'done','hi', 'hello', 'hey', '.menu', 'help', 'menu'];
-    
-    const isBusiness = businesskeywords.some(word => text.includes(word));
-    if (!isGroup && !isBusiness) {return; // Ignore non-business messages to save resources
-    }
-    const isImage = !!msg.message?.imageMessage;
     const remoteJid = msg.key.remoteJid;
     const isGroup = remoteJid.endsWith('@g.us');
     const sender = msg.key.participant || remoteJid;
+    const isImage = !!msg.message?.imageMessage;
 
-    // 1. GREETING (Neutral)
+    const businesskeywords = ['pay', 'account', 'rate', 'tr', 'track', 'paid', 'proof', 'alert', 'done','hi', 'hello', 'hey', '.menu', 'help', 'menu'];
+
+    // IGNORE GROUPS unless you add them to a whitelist (example)
+    const allowedGroups = (process.env.ALLOWED_GROUPS || "").split(","); 
+    if (isGroup && !allowedGroups.includes(remoteJid)) return;
+
+    const isBusiness = businesskeywords.some(word => text.includes(word));
+    if (!isGroup && !isBusiness) return; // Ignore non-business messages outside groups
+
+    // 1. GREETING
     if (!isGroup && (text === 'hi' || text === 'hello' || text === 'hey')) {
         return await sock.sendMessage(remoteJid, { 
             text: `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Type *.menu* for all commands or just talk to me!` 
@@ -46,22 +51,23 @@ async function handleMessage(msg, sock) {
         });
     }
 
-    // 3. THE COMMAND MENU
+    // 3. COMMAND MENU
     if (text === '.menu' || text === 'help' || text === 'menu') {
-      let menuMsg = `*🛠️ BUSINESS ASSISTANT v5.0*\n\n`;
+      let menuMsg = `*🛠️ BUSINESS ASSISTANT v5.1*\n\n`;
       menuMsg += `*💰 FINANCE*\n• \`.pay\` - Get Account Details\n• \`.rate\` - USD/NGN Rate\n\n`;
       menuMsg += `*🌍 TOOLS*\n• \`.tr [lang] [text]\` - Translator\n• \`.track\` - Logistics\n\n`;
+      menuMsg += `*🛒 PRODUCTS*\n• \`.add [name] [type] [file] [price]\` - Add Product\n• \`.get [name] [minPrice] [maxPrice]\` - Get Products\n\n`;
       menuMsg += `*🤖 AI CHAT*\nJust send any message to talk to me!\n\n_Reliability first. We no go carry last!_`;
       return await sock.sendMessage(remoteJid, { text: menuMsg });
     }
 
-    // 4. BANK ACCOUNT INFO (.pay)
+    // 4. BANK ACCOUNT INFO
     if (text === '.pay' || text === '.account') {
         let payMsg = `*💳 PAYMENT INFO*\n\n🏦 *Bank:* [BANK NAME]\n🔢 *Acc:* [NUMBER]\n👤 *Name:* [NAME]`;
         return await sock.sendMessage(remoteJid, { text: payMsg });
     }
 
-    // 5. DOLLAR RATE (.rate)
+    // 5. DOLLAR RATE
     if (text === '.rate') {
         const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
         const data = await response.json();
@@ -69,7 +75,7 @@ async function handleMessage(msg, sock) {
         return await sock.sendMessage(remoteJid, { text: `*📊 CURRENT RATE*\n\n1 USD = ₦${rate}` });
     }
 
-    // 6. UNIVERSAL TRANSLATOR (.tr)
+    // 6. UNIVERSAL TRANSLATOR
     if (text.startsWith('.tr')) {
       const args = body.split(' '); 
       if (args.length < 3) return await sock.sendMessage(remoteJid, { text: "❌ Use: .tr igbo How are you?" });
@@ -77,10 +83,35 @@ async function handleMessage(msg, sock) {
       return await sock.sendMessage(remoteJid, { text: `*🌍 TRANSLATION*\n\n${res.text}` });
     }
 
-    // ==========================================
-    // 7. THE AI "BRAIN" (CATCH-ALL)
-    // ==========================================
-    // If no command above matched, and it's not a group (or bot is tagged)
+    // 7. ADD PRODUCT (.add name type file price)
+    if (text.startsWith('.add')) {
+      const args = body.split(' ');
+      if (args.length < 5) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .add [name] [type:image|video] [filePath] [price]" });
+      const [_, name, type, file, priceStr] = args;
+      const price = parseInt(priceStr);
+      addProduct(name, type, file, price);
+      return await sock.sendMessage(remoteJid, { text: `✅ Product ${name} added successfully!` });
+    }
+
+    // 8. GET PRODUCT (.get name minPrice maxPrice)
+    if (text.startsWith('.get')) {
+      const args = body.split(' ');
+      if (args.length < 2) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .get [name] [minPrice] [maxPrice]" });
+      const name = args[1];
+      const minPrice = args[2] ? parseInt(args[2]) : 0;
+      const maxPrice = args[3] ? parseInt(args[3]) : Infinity;
+
+      const items = getProduct(name, minPrice, maxPrice);
+      if (items.length === 0) return await sock.sendMessage(remoteJid, { text: `❌ No ${name} found in that price range.` });
+
+      for (const item of items) {
+        if (item.type === 'image') await sock.sendMessage(remoteJid, { image: { url: item.file }, caption: `${name} - ₦${item.price}` });
+        if (item.type === 'video') await sock.sendMessage(remoteJid, { video: { url: item.file }, caption: `${name} - ₦${item.price}` });
+      }
+      return;
+    }
+
+    // 9. THE AI "BRAIN"
     if (body.length > 1 && !text.startsWith('.')) {
         const aiResponse = await chatWithAI(body);
         return await sock.sendMessage(remoteJid, { text: aiResponse });
@@ -94,8 +125,8 @@ async function chatWithAI(text) {
     const result = await model.generateContent(text);
     return result.response.text();
   } catch (e) {
-    console.log("GEMINI ERROR:", e.message);//This shows the Real error in railway logs
-    return`Glitch: ${e.message.slice(0,50)}`;//This sends the error to ur whatsapp
+    console.log("GEMINI ERROR:", e.message);
+    return `Glitch: ${e.message.slice(0,50)}`;
   }
 }
 
