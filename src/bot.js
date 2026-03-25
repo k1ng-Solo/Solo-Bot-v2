@@ -20,7 +20,6 @@ class WhatsAppBot {
     this.sock = null;
     this.isReconnecting = false;
     this.connectionAttempts = 0;
-    this.maxRetries = 5;
   }
 
   async start() {
@@ -30,7 +29,6 @@ class WhatsAppBot {
       await this.connect();
     } catch (err) {
       logger.error('Failed to start bot:', err);
-      process.exit(1);
     }
   }
 
@@ -57,6 +55,15 @@ class WhatsAppBot {
         browser: ['Ubuntu', 'Chrome', '20.0.04'],
         markOnlineOnConnect: true,
       });
+
+      notificationService.setSocket(this.sock);
+
+      // 🔐 Pairing Code Login (NO QR)
+      if (!this.sock.authState.creds.registered) {
+        const phoneNumber = process.env.OWNER_NUMBER;
+        const code = await this.sock.requestPairingCode(phoneNumber);
+        logger.info(`📱 Pairing Code: ${code}`);
+      }
 
       // Messages handler
       this.sock.ev.on('messages.upsert', async (m) => {
@@ -92,21 +99,24 @@ class WhatsAppBot {
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
+
       if (statusCode === DisconnectReason.loggedOut) {
         logger.error('❌ Logged out. Delete auth folder and restart.');
-        process.exit(0);
+        return;
       }
+
       await this.handleReconnect();
     }
   }
 
   async handleReconnect() {
     if (this.isReconnecting) return;
+
     this.isReconnecting = true;
     this.connectionAttempts++;
-    if (this.connectionAttempts > this.maxRetries) process.exit(1);
 
     const delay = Math.min(1000 * Math.pow(2, this.connectionAttempts), 30000);
+
     setTimeout(async () => {
       this.isReconnecting = false;
       await this.connect();
@@ -116,3 +126,8 @@ class WhatsAppBot {
 
 const bot = new WhatsAppBot();
 bot.start();
+
+// Railway keep alive
+setInterval(() => {
+  console.log("🟢 Bot still alive");
+}, 30000);

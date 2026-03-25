@@ -22,6 +22,8 @@ async function handleMessage(msg, sock) {
     const sender = msg.key.participant || remoteJid;
     const isImage = !!msg.message?.imageMessage;
 
+    const ownerNum = process.env.OWNER_NUMBER + "@s.whatsapp.net";
+
     const businesskeywords = ['pay','account','rate','tr','track','paid','proof','alert','done','hi','hello','hey','.menu','help','menu'];
     const allowedGroups = (process.env.ALLOWED_GROUPS || "").split(","); 
     if (isGroup && !allowedGroups.includes(remoteJid)) return;
@@ -35,7 +37,7 @@ async function handleMessage(msg, sock) {
     // PAYMENT PROOF
     if (isImage && ['paid','proof','alert','done'].some(word => text.includes(word))) {
         await sock.sendMessage(remoteJid, { text: "✅ *Payment Proof Received.* Waiting for admin verification." });
-        return sock.sendMessage(process.env.OWNER_NUMBER + "@s.whatsapp.net", { text: `🚨 Verification alert from wa.me/${sender.split('@')[0]}` });
+        return sock.sendMessage(ownerNum, { text: `🚨 Verification alert from wa.me/${sender.split('@')[0]}` });
     }
 
     // MENU

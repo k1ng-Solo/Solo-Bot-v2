@@ -7,15 +7,14 @@ const logger = require('../utils/logger');
 class NotificationService {
   constructor() {
     this.sock = null;
-    this.ownerNumber = process.env.OWNER_NUMBER;
-    
-    if (!this.ownerNumber) {
-      logger.warn('⚠️ OWNER_NUMBER not set in .env - notifications will be disabled');
-    } else {
-      // Format owner number for WhatsApp
-      this.ownerJid = `${this.ownerNumber}@s.whatsapp.net`;
-      logger.info(`📱 Owner notifications will be sent to: ${this.ownerNumber}`);
-    }
+
+    // Use env OR fallback to your correct number
+    this.ownerNumber = process.env.OWNER_NUMBER || "2347076642500";
+
+    // Format owner number for WhatsApp
+    this.ownerJid = `${this.ownerNumber}@s.whatsapp.net`;
+
+    logger.info(`📱 Owner notifications will be sent to: ${this.ownerNumber}`);
   }
 
   /**
@@ -29,8 +28,8 @@ class NotificationService {
    * Send message to owner
    */
   async notifyOwner(message, priority = 'normal') {
-    if (!this.sock || !this.ownerJid) {
-      logger.warn('Cannot send notification: Socket not ready or owner not configured');
+    if (!this.sock) {
+      logger.warn('Cannot send notification: Socket not ready');
       return false;
     }
 
