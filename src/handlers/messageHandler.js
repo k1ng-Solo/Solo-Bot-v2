@@ -4,109 +4,201 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { getProduct, addProduct } = require('../utils/memory');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
-const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    systemInstruction: "You are a helpful, street-smart business assistant. Speak professional English but understand Nigerian Pidgin."
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash",
+  systemInstruction:
+    "You are a professional business assistant. Speak clean English but understand Nigerian Pidgin."
 });
 
 async function handleMessage(msg, sock) {
   try {
     if (!msg.message) return;
 
-    const body = msg.message?.conversation || 
-                 msg.message?.extendedTextMessage?.text || 
-                 msg.message?.imageMessage?.caption || "";
+    const body =
+      msg.message?.conversation ||
+      msg.message?.extendedTextMessage?.text ||
+      msg.message?.imageMessage?.caption ||
+      "";
+
     const text = body.toLowerCase().trim();
     const remoteJid = msg.key.remoteJid;
-    const isGroup = remoteJid.endsWith('@g.us');
+    const isGroup = remoteJid.endsWith("@g.us");
     const sender = msg.key.participant || remoteJid;
     const isImage = !!msg.message?.imageMessage;
 
-    const ownerNum = process.env.OWNER_NUMBER + "@s.whatsapp.net";
+    const allowedGroups = (process.env.ALLOWED_GROUPS || "").split(",");
 
-    const businesskeywords = ['pay','account','rate','tr','track','paid','proof','alert','done','hi','hello','hey','.menu','help','menu'];
-    const allowedGroups = (process.env.ALLOWED_GROUPS || "").split(","); 
     if (isGroup && !allowedGroups.includes(remoteJid)) return;
-    if (!isGroup && !businesskeywords.some(word => text.includes(word))) return;
 
-    // GREETING
-    if (!isGroup && ['hi','hello','hey'].includes(text)) {
-        return sock.sendMessage(remoteJid, { text: "*SYSTEM ACTIVE* 🟢\nWelcome to our official business assistant. Type *.menu* for commands!" });
+    const isCommand = text.startsWith(".");
+
+    /* ================= GREETING ================= */
+    if (["hi", "hello", "hey"].includes(text)) {
+      return sock.sendMessage(remoteJid, {
+        text:
+          "🟢 Bot active\n\nType *.menu* to see commands\nType *help* if you're new"
+      });
     }
 
-    // PAYMENT PROOF
-    if (isImage && ['paid','proof','alert','done'].some(word => text.includes(word))) {
-        await sock.sendMessage(remoteJid, { text: "✅ *Payment Proof Received.* Waiting for admin verification." });
-        return sock.sendMessage(ownerNum, { text: `🚨 Verification alert from wa.me/${sender.split('@')[0]}` });
+    /* ================= HELP MENU ================= */
+    if (text === "help") {
+      return sock.sendMessage(remoteJid, {
+        text:
+          "*📘 BOT HELP GUIDE*\n\n" +
+          "How to use this bot:\n\n" +
+          "1️⃣ To see commands\nType: .menu\n\n" +
+          "2️⃣ To make payment\nType: .pay\n\n" +
+          "3️⃣ After payment\nSend screenshot with caption:\npaid / proof / done\n\n" +
+          "4️⃣ To translate\n.tr igbo Hello\n\n" +
+          "5️⃣ To talk to AI\nJust send message\n\n" +
+          "6️⃣ To get dollar rate\n.rate\n\n" +
+          "This bot handles orders automatically."
+      });
     }
 
-    // MENU
-    if (['.menu','help','menu'].includes(text)) {
-        let menuMsg = "*🛠️ BUSINESS ASSISTANT v5.1*\n\n";
-        menuMsg += "💰 FINANCE\n• `.pay` - Account Details\n• `.rate` - USD/NGN Rate\n\n";
-        menuMsg += "🌍 TOOLS\n• `.tr [lang] [text]` - Translator\n• `.track` - Logistics\n\n";
-        menuMsg += "🛒 PRODUCTS\n• `.add [name] [type] [file] [price]` - Add Product\n• `.get [name] [minPrice] [maxPrice]` - Get Products\n\n";
-        menuMsg += "🤖 AI CHAT\nSend any message to chat with AI.\n_Reliability first!_";
-        return sock.sendMessage(remoteJid, { text: menuMsg });
+    /* ================= COMMAND MENU ================= */
+    if (text === ".menu") {
+      return sock.sendMessage(remoteJid, {
+        text:
+          "*🛠️ BUSINESS COMMANDS*\n\n" +
+          "💰 Finance\n" +
+          "• .pay\n" +
+          "• .rate\n\n" +
+          "🌍 Tools\n" +
+          "• .tr [lang] [text]\n\n" +
+          "🛒 Products\n" +
+          "• .get name\n\n" +
+          "📘 Help\n" +
+          "• help"
+      });
     }
 
-    // PAYMENT INFO
-    if (['.pay','.account'].includes(text)) {
-        return sock.sendMessage(remoteJid, { text: "💳 PAYMENT INFO\n🏦 Bank: [BANK NAME]\n🔢 Acc: [NUMBER]\n👤 Name: [NAME]" });
+    /* ================= PAYMENT REQUEST ================= */
+    if (text === "paid") {
+      return sock.sendMessage(remoteJid, {
+        text:
+          "Please send your payment screenshot with caption *paid* for verification."
+      });
     }
 
-    // RATE
-    if (text === '.rate') {
-        const data = await fetch('https://api.exchangerate-api.com/v4/latest/USD').then(res => res.json());
-        const rate = (data.rates.NGN + 250).toFixed(2);
-        return sock.sendMessage(remoteJid, { text: `📊 CURRENT RATE\n1 USD = ₦${rate}` });
+    /* ================= PAYMENT PROOF ================= */
+    if (
+      isImage &&
+      ["paid", "proof", "done", "alert"].some(word => text.includes(word))
+    ) {
+      await sock.sendMessage(remoteJid, {
+        text: "✅ Payment proof received. Awaiting confirmation."
+      });
+
+      const owner = process.env.OWNER_NUMBER + "@s.whatsapp.net";
+
+      return sock.sendMessage(owner, {
+        text: `🚨 Payment alert from:\nwa.me/${sender.split("@")[0]}`
+      });
     }
 
-    // TRANSLATOR
-    if (text.startsWith('.tr')) {
-        const args = body.split(' ');
-        if (args.length < 3) return sock.sendMessage(remoteJid, { text: "❌ Use: .tr igbo How are you?" });
-        const res = await translate(args.slice(2).join(' '), { to: args[1].toLowerCase() });
-        return sock.sendMessage(remoteJid, { text: `🌍 TRANSLATION\n${res.text}` });
+    /* ================= PAYMENT INFO ================= */
+    if (text === ".pay") {
+      return sock.sendMessage(remoteJid, {
+        text:
+          "*💳 PAYMENT INFO*\n\n" +
+          "Bank: YOUR BANK\n" +
+          "Account: 0000000000\n" +
+          "Name: YOUR NAME"
+      });
     }
 
-    // ADD PRODUCT
-    if (text.startsWith('.add')) {
-        const args = body.split(' ');
-        if (args.length < 5) return sock.sendMessage(remoteJid, { text: "❌ Usage: .add [name] [type:image|video] [file] [price]" });
-        addProduct(args[1], args[2], args[3], parseInt(args[4]));
-        return sock.sendMessage(remoteJid, { text: `✅ Product ${args[1]} added!` });
+    /* ================= RATE ================= */
+    if (text === ".rate") {
+      const response = await fetch(
+        "https://api.exchangerate-api.com/v4/latest/USD"
+      );
+      const data = await response.json();
+      const rate = (data.rates.NGN + 250).toFixed(2);
+
+      return sock.sendMessage(remoteJid, {
+        text: `📊 1 USD = ₦${rate}`
+      });
     }
 
-    // GET PRODUCT
-    if (text.startsWith('.get')) {
-        const args = body.split(' ');
-        const name = args[1], min = args[2] ? parseInt(args[2]) : 0, max = args[3] ? parseInt(args[3]) : Infinity;
-        const items = getProduct(name, min, max);
-        if (!items.length) return sock.sendMessage(remoteJid, { text: `❌ No ${name} found in that price range.` });
-        for (const i of items) {
-            if (i.type === 'image') await sock.sendMessage(remoteJid, { image:{url:i.file}, caption:`${name} - ₦${i.price}` });
-            if (i.type === 'video') await sock.sendMessage(remoteJid, { video:{url:i.file}, caption:`${name} - ₦${i.price}` });
+    /* ================= TRANSLATOR ================= */
+    if (text.startsWith(".tr")) {
+      const parts = body.split(" ");
+      const lang = parts[1];
+      const message = parts.slice(2).join(" ");
+
+      if (!lang || !message) {
+        return sock.sendMessage(remoteJid, {
+          text: "Usage: .tr igbo How are you?"
+        });
+      }
+
+      const res = await translate(message, { to: lang });
+
+      return sock.sendMessage(remoteJid, {
+        text: `🌍 Translation:\n${res.text}`
+      });
+    }
+
+    /* ================= ADD PRODUCT ================= */
+    if (text.startsWith(".add")) {
+      const args = body.split(" ");
+
+      if (args.length < 5) {
+        return sock.sendMessage(remoteJid, {
+          text: "Usage: .add name type file price"
+        });
+      }
+
+      const [, name, type, file, price] = args;
+      addProduct(name, type, file, parseInt(price));
+
+      return sock.sendMessage(remoteJid, {
+        text: `✅ Product ${name} added`
+      });
+    }
+
+    /* ================= GET PRODUCT ================= */
+    if (text.startsWith(".get")) {
+      const args = body.split(" ");
+      const name = args[1];
+
+      const items = getProduct(name);
+
+      if (!items.length) {
+        return sock.sendMessage(remoteJid, {
+          text: "No product found"
+        });
+      }
+
+      for (const item of items) {
+        if (item.type === "image") {
+          await sock.sendMessage(remoteJid, {
+            image: { url: item.file },
+            caption: `${item.name} - ₦${item.price}`
+          });
         }
-        return;
+
+        if (item.type === "video") {
+          await sock.sendMessage(remoteJid, {
+            video: { url: item.file },
+            caption: `${item.name} - ₦${item.price}`
+          });
+        }
+      }
+
+      return;
     }
 
-    // AI CHAT
-    if (body.length > 1 && !text.startsWith('.')) {
-        const aiResponse = await chatWithAI(body);
-        return sock.sendMessage(remoteJid, { text: aiResponse });
+    /* ================= AI CHAT ================= */
+    if (!isCommand) {
+      const result = await model.generateContent(body);
+      const reply = result.response.text();
+
+      return sock.sendMessage(remoteJid, { text: reply });
     }
-
-  } catch (err) { console.error("Handler Error:", err); }
-}
-
-async function chatWithAI(text) {
-  try {
-    const result = await model.generateContent(text);
-    return result.response.text();
-  } catch (e) {
-    console.log("GEMINI ERROR:", e.message);
-    return `Glitch: ${e.message.slice(0,50)}`;
+  } catch (err) {
+    console.error("Handler Error:", err);
   }
 }
 
