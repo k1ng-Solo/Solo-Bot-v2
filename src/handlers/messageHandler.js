@@ -1,19 +1,19 @@
-const fetch = require('node-fetch');
+const fs = require('fs');
 const path = require('path');
-const { getProduct, addProduct, deleteProduct, updateProduct, saveRate, getRate } = require('../utils/memory');
+const fetch = require('node-fetch');
+const { getProduct, addProduct, deleteProduct, updateProduct, getCurrencies, addCurrency } = require('../utils/memory');
 
 // ==============================
-// GLOBAL CONFIG
+// CONFIGURATION
 // ==============================
-const OWNER_NUMBER = process.env.OWNER_NUMBER + '@s.whatsapp.net';
-const ALLOWED_GROUPS = (process.env.ALLOWED_GROUPS || "").split(",");
+const OWNER_NUMBER = process.env.OWNER_NUMBER + "@s.whatsapp.net";
 
 // ==============================
-// GREETINGS LIST
+// GLOBAL GREETINGS
 // ==============================
 const greetings = [
-  "hi","hello","hey","hola","bonjour","ciao","hallo","namaste","salut","sawasdee","konnichiwa",
-  "ola","marhaba","shalom","hej","ahoj","xin chào","sain baina uu","privet"
+  "hi", "hello", "hey", "hwfr", "hw fa", "hw fr", "how far", "wassup", "wagwan", "hyd",
+  "hola", "bonjour", "ciao", "hallo", "salaam", "namaste", "konnichiwa", "olá", "shalom"
 ];
 
 // ==============================
@@ -30,61 +30,67 @@ async function handleMessage(msg, sock) {
       "";
     const text = body.toLowerCase().trim();
     const remoteJid = msg.key.remoteJid;
-    const isGroup = remoteJid.endsWith('@g.us');
     const sender = msg.key.participant || remoteJid;
+    const isGroup = remoteJid.endsWith('@g.us');
     const isImage = !!msg.message?.imageMessage;
 
     // ==============================
-    // IGNORE GROUPS unless whitelisted
-    // ==============================
-    if (isGroup && !ALLOWED_GROUPS.includes(remoteJid)) return;
-
-    // ==============================
-    // FIRST GREETING / SYSTEM ACTIVE
+    // FIRST-TIME GREETING / SYSTEM ACTIVE
     // ==============================
     if (greetings.includes(text)) {
-      await sock.sendMessage(remoteJid, {
-        text: `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Please state your name and how we can help you.\n\nType *.menu* for all commands. And .help for guidance.`
-      });
+      const greetMsg = `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Please state your name and how we can help you.\n\nType *.menu* for all commands. And *.help* for guidance.`;
+      await sock.sendMessage(remoteJid, { text: greetMsg });
       return;
     }
 
     // ==============================
-    // COMMAND: .menu
+    // COMMAND MENU
     // ==============================
-    if (text === '.menu') {
-      const menuMsg = `*🛠️ BUSINESS ASSISTANT v5.3*\n\n` +
-        `*💰 FINANCE*\n• .pay - Bank info\n• .rate - Currency / Crypto Rates\n\n` +
-        `*🌍 TOOLS*\n• .track - Logistics\n\n` +
-        `*🛒 PRODUCTS*\n• .add [name] [type:image|video] [file] [price] - Add product\n` +
-        `• .get [name] [minPrice] [maxPrice] - Get products\n` +
-        `• .delete [id] - Delete product\n` +
-        `• .update [id] [field] [value] - Update product\n\n` +
-        `_Reliability first. We no go carry last!_`;
+    if (text === '.menu' || text === 'menu') {
+      let menuMsg = `*🛠️ BUSINESS ASSISTANT v5.3*\n\n`;
 
-      // optional logo
-      const logoPath = path.join(__dirname, '../assets/logo.png');
-      return await sock.sendMessage(remoteJid, { 
-        image: { url: logoPath },
-        caption: menuMsg
-      });
+      menuMsg += `*💰 FINANCE*\n• .pay - Bank info\n• .rate - Exchange rates (All currencies & crypto)\n\n`;
+      menuMsg += `*🛒 PRODUCTS*\n• .add [name] [type:image|video] [file] [price] - Add product (Owner only)\n`;
+      menuMsg += `• .get [name] [minPrice] [maxPrice] - Get products\n`;
+      menuMsg += `• .delete [id] - Delete product (Owner only)\n`;
+      menuMsg += `• .update [id] [field] [value] - Update product (Owner only)\n\n`;
+      menuMsg += `Type *.help* for guidance`;
+
+      // Optional: send business logo image first if you have one saved in memory
+      const logoPath = path.join(__dirname, '../utils/logo.jpg');
+      if (fs.existsSync(logoPath)) {
+        await sock.sendMessage(remoteJid, { image: { url: logoPath }, caption: menuMsg });
+      } else {
+        await sock.sendMessage(remoteJid, { text: menuMsg });
+      }
+      return;
     }
 
     // ==============================
-    // COMMAND: .help
+    // HELP MENU
     // ==============================
-    if (text === 'help') {
+    if (text === 'help' || text === '.help') {
       const helpMsg = `*🆘 BOT HELP v5.3*\n\n` +
         `• Type *.menu* to see main commands\n` +
-        `• Products: .add, .get, .delete, .update (owner-only)\n` +
-        `• Bank info: .pay\n` +
-        `• Currency/crypto rates: .rate\n` +
-        `• Logistics: .track`;
-      return await sock.sendMessage(remoteJid, { text: helpMsg });
+        `• Product commands (.add, .get, .delete, .update) are owner-only for security\n` +
+        `• Use *.rate* to see exchange rates or crypto rates\n` +
+        `• Greeting triggers SYSTEM ACTIVE message\n` +
+        `• Payments: .pay\n` +
+        `• Contact admin for any assistance`;
+      await sock.sendMessage(remoteJid, { text: helpMsg });
+      return;
     }
 
     // ==============================
-    // OWNER-ONLY: ADD PRODUCT
+    // BANK ACCOUNT INFO
+    // ==============================
+    if (text === '.pay' || text === '.account') {
+      const payMsg = `*💳 PAYMENT INFO*\n\n🏦 Bank: [BANK NAME]\n🔢 Acc: [NUMBER]\n👤 Name: [NAME]\n📞 Phone: [NUMBER]`;
+      return await sock.sendMessage(remoteJid, { text: payMsg });
+    }
+
+    // ==============================
+    // ADD PRODUCT (Owner only)
     // ==============================
     if (text.startsWith('.add')) {
       if (sender !== OWNER_NUMBER) return;
@@ -97,7 +103,7 @@ async function handleMessage(msg, sock) {
     }
 
     // ==============================
-    // OWNER-ONLY: DELETE PRODUCT
+    // DELETE PRODUCT (Owner only)
     // ==============================
     if (text.startsWith('.delete')) {
       if (sender !== OWNER_NUMBER) return;
@@ -105,44 +111,23 @@ async function handleMessage(msg, sock) {
       if (args.length < 2) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .delete [id]" });
       const id = args[1];
       deleteProduct(id);
-      return await sock.sendMessage(remoteJid, { text: `✅ Product ${id} deleted successfully!` });
+      return await sock.sendMessage(remoteJid, { text: `✅ Product ${id} deleted.` });
     }
 
     // ==============================
-    // OWNER-ONLY: UPDATE PRODUCT
+    // UPDATE PRODUCT (Owner only)
     // ==============================
     if (text.startsWith('.update')) {
       if (sender !== OWNER_NUMBER) return;
       const args = body.split(' ');
       if (args.length < 4) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .update [id] [field] [value]" });
-      const [_, id, field, ...valueParts] = args;
-      const value = valueParts.join(' ');
-      updateProduct(id, field, value);
-      return await sock.sendMessage(remoteJid, { text: `✅ Product ${id} updated successfully!` });
+      const [_, id, field, ...value] = args;
+      updateProduct(id, field, value.join(' '));
+      return await sock.sendMessage(remoteJid, { text: `✅ Product ${id} updated.` });
     }
 
     // ==============================
-    // BANK INFO
-    // ==============================
-    if (['.pay', '.account'].includes(text)) {
-      const payMsg = `*💳 PAYMENT INFO*\n\n🏦 Bank: [BANK NAME]\n🔢 Acc: [NUMBER]\n👤 Name: [NAME]`;
-      return await sock.sendMessage(remoteJid, { text: payMsg });
-    }
-
-    // ==============================
-    // CURRENCY / CRYPTO RATE
-    // ==============================
-    if (text === '.rate') {
-      const rates = await getRate(); // memory will auto-update
-      let rateMsg = '*📊 RATES*\n\n';
-      for (const [key, val] of Object.entries(rates)) {
-        rateMsg += `1 ${key} = ${val}\n`;
-      }
-      return await sock.sendMessage(remoteJid, { text: rateMsg });
-    }
-
-    // ==============================
-    // GET PRODUCTS
+    // GET PRODUCT
     // ==============================
     if (text.startsWith('.get')) {
       const args = body.split(' ');
@@ -152,12 +137,36 @@ async function handleMessage(msg, sock) {
       const maxPrice = args[3] ? parseInt(args[3]) : Infinity;
 
       const items = getProduct(name, minPrice, maxPrice);
-      if (!items.length) return await sock.sendMessage(remoteJid, { text: `❌ No ${name} found in that price range.` });
+      if (items.length === 0) return await sock.sendMessage(remoteJid, { text: `❌ No ${name} found in that price range.` });
 
       for (const item of items) {
         if (item.type === 'image') await sock.sendMessage(remoteJid, { image: { url: item.file }, caption: `${name} - ₦${item.price}` });
         if (item.type === 'video') await sock.sendMessage(remoteJid, { video: { url: item.file }, caption: `${name} - ₦${item.price}` });
       }
+      return;
+    }
+
+    // ==============================
+    // CURRENCY / CRYPTO RATE (.rate)
+    // ==============================
+    if (text.startsWith('.rate')) {
+      // Load known currencies from memory
+      let currencies = getCurrencies(); // returns array of { code, name, lastRate }
+
+      // Fetch latest rates (USD base)
+      const response = await fetch('https://api.exchangerate.host/latest');
+      const data = await response.json();
+      for (const code in data.rates) {
+        if (!currencies.find(c => c.code === code)) addCurrency(code, data.rates[code]);
+      }
+      currencies = getCurrencies();
+
+      // Send numbered list to user
+      let rateMsg = '*Select currency/crypto to see rate:*\n';
+      currencies.forEach((c, i) => rateMsg += `${i+1}️⃣ ${c.code}\n`);
+      await sock.sendMessage(remoteJid, { text: rateMsg });
+
+      // You would add next steps: wait for reply, choose payment method, then show rate
       return;
     }
 

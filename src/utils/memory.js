@@ -5,30 +5,30 @@ const path = require('path');
 // FILE PATHS
 // ==============================
 const PRODUCTS_FILE = path.join(__dirname, 'products.json');
-const RATES_FILE = path.join(__dirname, 'rates.json');
+const CURRENCIES_FILE = path.join(__dirname, 'currencies.json');
 
 // ==============================
-// HELPER: Load JSON
+// HELPER: Read JSON safely
 // ==============================
-function loadJSON(filePath) {
+function readJSON(filePath) {
   try {
-    if (!fs.existsSync(filePath)) return {};
-    const raw = fs.readFileSync(filePath);
+    if (!fs.existsSync(filePath)) return [];
+    const raw = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(raw);
-  } catch (e) {
-    console.error(`Error loading ${filePath}:`, e);
-    return {};
+  } catch (err) {
+    console.error(`Error reading ${filePath}:`, err);
+    return [];
   }
 }
 
 // ==============================
-// HELPER: Save JSON
+// HELPER: Write JSON safely
 // ==============================
-function saveJSON(filePath, data) {
+function writeJSON(filePath, data) {
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.error(`Error saving ${filePath}:`, e);
+  } catch (err) {
+    console.error(`Error writing ${filePath}:`, err);
   }
 }
 
@@ -36,16 +36,15 @@ function saveJSON(filePath, data) {
 // PRODUCT FUNCTIONS
 // ==============================
 function addProduct(name, type, file, price) {
-  const products = loadJSON(PRODUCTS_FILE);
-  const id = Date.now().toString();
-  products[id] = { id, name, type, file, price };
-  saveJSON(PRODUCTS_FILE, products);
-  return id;
+  const products = readJSON(PRODUCTS_FILE);
+  const id = products.length ? products[products.length - 1].id + 1 : 1;
+  products.push({ id, name, type, file, price });
+  writeJSON(PRODUCTS_FILE, products);
 }
 
-function getProduct(name, minPrice = 0, maxPrice = Infinity) {
-  const products = loadJSON(PRODUCTS_FILE);
-  return Object.values(products).filter(p =>
+function getProduct(name = '', minPrice = 0, maxPrice = Infinity) {
+  const products = readJSON(PRODUCTS_FILE);
+  return products.filter(p =>
     p.name.toLowerCase().includes(name.toLowerCase()) &&
     p.price >= minPrice &&
     p.price <= maxPrice
@@ -53,44 +52,52 @@ function getProduct(name, minPrice = 0, maxPrice = Infinity) {
 }
 
 function deleteProduct(id) {
-  const products = loadJSON(PRODUCTS_FILE);
-  if (products[id]) {
-    delete products[id];
-    saveJSON(PRODUCTS_FILE, products);
-  }
+  let products = readJSON(PRODUCTS_FILE);
+  products = products.filter(p => p.id != id);
+  writeJSON(PRODUCTS_FILE, products);
 }
 
 function updateProduct(id, field, value) {
-  const products = loadJSON(PRODUCTS_FILE);
-  if (products[id] && field in products[id]) {
-    // Convert price to number if updating price
-    products[id][field] = field === 'price' ? Number(value) : value;
-    saveJSON(PRODUCTS_FILE, products);
+  const products = readJSON(PRODUCTS_FILE);
+  const index = products.findIndex(p => p.id == id);
+  if (index === -1) return;
+  products[index][field] = field === 'price' ? parseInt(value) : value;
+  writeJSON(PRODUCTS_FILE, products);
+}
+
+// ==============================
+// CURRENCY / CRYPTO FUNCTIONS
+// ==============================
+function getCurrencies() {
+  return readJSON(CURRENCIES_FILE);
+}
+
+function addCurrency(code, rate) {
+  const currencies = readJSON(CURRENCIES_FILE);
+  const existing = currencies.find(c => c.code === code);
+  if (!existing) {
+    currencies.push({ code, lastRate: rate });
+    writeJSON(CURRENCIES_FILE, currencies);
   }
 }
 
-// ==============================
-// EXCHANGE RATE FUNCTIONS
-// ==============================
-function saveRate(currency, value) {
-  const rates = loadJSON(RATES_FILE);
-  rates[currency] = value;
-  saveJSON(RATES_FILE, rates);
+function updateCurrency(code, rate) {
+  const currencies = readJSON(CURRENCIES_FILE);
+  const index = currencies.findIndex(c => c.code === code);
+  if (index !== -1) {
+    currencies[index].lastRate = rate;
+    writeJSON(CURRENCIES_FILE, currencies);
+  } else {
+    addCurrency(code, rate);
+  }
 }
 
-function getRate(currency) {
-  const rates = loadJSON(RATES_FILE);
-  return rates[currency] || null;
-}
-
-// ==============================
-// EXPORTS
-// ==============================
 module.exports = {
   addProduct,
   getProduct,
   deleteProduct,
   updateProduct,
-  saveRate,
-  getRate
+  getCurrencies,
+  addCurrency,
+  updateCurrency
 };
