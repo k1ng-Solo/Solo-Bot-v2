@@ -1,59 +1,52 @@
 const fs = require('fs');
 const path = require('path');
 
-// File to store products
-const memoryFile = path.join(__dirname, 'products.json');
+const DATA_FILE = path.join(__dirname, 'products.json');
 
-// Load existing memory or create empty
-let products = [];
-if (fs.existsSync(memoryFile)) {
-    try {
-        products = JSON.parse(fs.readFileSync(memoryFile));
-    } catch (err) {
-        console.error("Error reading memory file, starting fresh:", err);
-        products = [];
-    }
-} else {
-    fs.writeFileSync(memoryFile, JSON.stringify(products, null, 2));
+// ==============================
+// HELPER: Load products from JSON
+// ==============================
+function loadProducts() {
+  try {
+    if (!fs.existsSync(DATA_FILE)) return [];
+    const raw = fs.readFileSync(DATA_FILE);
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error("Error loading products:", e);
+    return [];
+  }
 }
 
-/**
- * Add a product to memory
- * @param {string} name - Product name
- * @param {string} type - "image" or "video"
- * @param {string} file - File path or URL
- * @param {number} price - Price in Naira
- */
+// ==============================
+// HELPER: Save products to JSON
+// ==============================
+function saveProducts(products) {
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(products, null, 2));
+  } catch (e) {
+    console.error("Error saving products:", e);
+  }
+}
+
+// ==============================
+// ADD PRODUCT
+// ==============================
 function addProduct(name, type, file, price) {
-    const newProduct = { name, type, file, price };
-    products.push(newProduct);
-    saveMemory();
+  const products = loadProducts();
+  products.push({ name, type, file, price });
+  saveProducts(products);
 }
 
-/**
- * Get products by name and optional price range
- * @param {string} name - Name to search
- * @param {number} minPrice - Minimum price
- * @param {number} maxPrice - Maximum price
- * @returns {Array} - Array of matching products
- */
+// ==============================
+// GET PRODUCTS (filter by name & price)
+// ==============================
 function getProduct(name, minPrice = 0, maxPrice = Infinity) {
-    return products.filter(p => 
-        p.name.toLowerCase().includes(name.toLowerCase()) &&
-        p.price >= minPrice &&
-        p.price <= maxPrice
-    );
-}
-
-/**
- * Save memory to file
- */
-function saveMemory() {
-    try {
-        fs.writeFileSync(memoryFile, JSON.stringify(products, null, 2));
-    } catch (err) {
-        console.error("Error saving memory:", err);
-    }
+  const products = loadProducts();
+  return products.filter(p => 
+    p.name.toLowerCase().includes(name.toLowerCase()) &&
+    p.price >= minPrice &&
+    p.price <= maxPrice
+  );
 }
 
 module.exports = { addProduct, getProduct };
