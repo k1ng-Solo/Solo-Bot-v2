@@ -1,30 +1,34 @@
 const fs = require('fs');
 const path = require('path');
 
+// ==============================
+// FILE PATHS
+// ==============================
 const PRODUCTS_FILE = path.join(__dirname, 'products.json');
 const RATES_FILE = path.join(__dirname, 'rates.json');
 
 // ==============================
 // HELPER: Load JSON
 // ==============================
-function loadJson(file) {
+function loadJSON(filePath) {
   try {
-    if (!fs.existsSync(file)) return [];
-    return JSON.parse(fs.readFileSync(file));
+    if (!fs.existsSync(filePath)) return {};
+    const raw = fs.readFileSync(filePath);
+    return JSON.parse(raw);
   } catch (e) {
-    console.error(`Error loading ${file}:`, e);
-    return [];
+    console.error(`Error loading ${filePath}:`, e);
+    return {};
   }
 }
 
 // ==============================
 // HELPER: Save JSON
 // ==============================
-function saveJson(file, data) {
+function saveJSON(filePath, data) {
   try {
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
   } catch (e) {
-    console.error(`Error saving ${file}:`, e);
+    console.error(`Error saving ${filePath}:`, e);
   }
 }
 
@@ -32,58 +36,61 @@ function saveJson(file, data) {
 // PRODUCT FUNCTIONS
 // ==============================
 function addProduct(name, type, file, price) {
-  const products = loadJson(PRODUCTS_FILE);
-  products.push({ id: Date.now(), name, type, file, price });
-  saveJson(PRODUCTS_FILE, products);
+  const products = loadJSON(PRODUCTS_FILE);
+  const id = Date.now().toString();
+  products[id] = { id, name, type, file, price };
+  saveJSON(PRODUCTS_FILE, products);
+  return id;
 }
 
 function getProduct(name, minPrice = 0, maxPrice = Infinity) {
-  const products = loadJson(PRODUCTS_FILE);
-  return products.filter(p =>
+  const products = loadJSON(PRODUCTS_FILE);
+  return Object.values(products).filter(p =>
     p.name.toLowerCase().includes(name.toLowerCase()) &&
-    p.price >= minPrice && p.price <= maxPrice
+    p.price >= minPrice &&
+    p.price <= maxPrice
   );
 }
 
 function deleteProduct(id) {
-  let products = loadJson(PRODUCTS_FILE);
-  products = products.filter(p => p.id != id);
-  saveJson(PRODUCTS_FILE, products);
+  const products = loadJSON(PRODUCTS_FILE);
+  if (products[id]) {
+    delete products[id];
+    saveJSON(PRODUCTS_FILE, products);
+  }
 }
 
 function updateProduct(id, field, value) {
-  const products = loadJson(PRODUCTS_FILE);
-  const idx = products.findIndex(p => p.id == id);
-  if (idx !== -1) {
-    products[idx][field] = value;
-    saveJson(PRODUCTS_FILE, products);
-    return true;
+  const products = loadJSON(PRODUCTS_FILE);
+  if (products[id] && field in products[id]) {
+    // Convert price to number if updating price
+    products[id][field] = field === 'price' ? Number(value) : value;
+    saveJSON(PRODUCTS_FILE, products);
   }
-  return false;
 }
 
 // ==============================
-// RATES FUNCTIONS (cache)
+// EXCHANGE RATE FUNCTIONS
 // ==============================
-function saveRate(currency, rate) {
-  const rates = loadJson(RATES_FILE);
-  const idx = rates.findIndex(r => r.currency === currency);
-  const entry = { currency, rate, timestamp: Date.now() };
-  if (idx !== -1) rates[idx] = entry;
-  else rates.push(entry);
-  saveJson(RATES_FILE, rates);
+function saveRate(currency, value) {
+  const rates = loadJSON(RATES_FILE);
+  rates[currency] = value;
+  saveJSON(RATES_FILE, rates);
 }
 
 function getRate(currency) {
-  const rates = loadJson(RATES_FILE);
-  const entry = rates.find(r => r.currency === currency);
-  if (!entry) return null;
-  // use cached if < 60 min old
-  if (Date.now() - entry.timestamp < 60 * 60 * 1000) return entry.rate;
-  return null;
+  const rates = loadJSON(RATES_FILE);
+  return rates[currency] || null;
 }
 
+// ==============================
+// EXPORTS
+// ==============================
 module.exports = {
-  addProduct, getProduct, deleteProduct, updateProduct,
-  saveRate, getRate
+  addProduct,
+  getProduct,
+  deleteProduct,
+  updateProduct,
+  saveRate,
+  getRate
 };
