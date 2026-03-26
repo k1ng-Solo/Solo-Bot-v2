@@ -1,158 +1,156 @@
-const { getProduct, addProduct, deleteProduct, updateProduct } = require('../utils/memory'); // Memory system
+const fetch = require('node-fetch');
+const { getProduct, addProduct, deleteProduct, updateProduct, saveRate, getRate } = require('./memory');
 
 // ==============================
-// GLOBAL GREETINGS
+// GLOBAL CONFIG
 // ==============================
-const greetings = [
-  "hi", "hello", "hey", "hiya", "yo", "wassup", "greetings",
-  "hola", "bonjour", "ciao", "hallo", "namaste", "salut", "aloha",
-  "konnichiwa", "olá", "merhaba", "salaam", "shalom", "hej", "god dag",
-  "privet", "ni hao", "annyeong", "sawubona", "sup"
+const OWNER_NUMBER = process.env.OWNER_NUMBER + '@s.whatsapp.net';
+const BUSINESS_NAME = process.env.BUSINESS_NAME || "Your Business";
+const BANK_NAME = process.env.BANK_NAME || "[BANK NAME]";
+const ACCOUNT_NUMBER = process.env.ACCOUNT_NUMBER || "[NUMBER]";
+const ACCOUNT_NAME = process.env.ACCOUNT_NAME || "[NAME]";
+
+// All greetings worldwide
+const GREETINGS = [
+  "hi", "hello", "hey", "hola", "bonjour", "hallo", "ciao", "namaste", "shalom",
+  "salaam", "konichiwa", "annyeong", "hej", "ola", "merhaba", "xin chào", "yassas"
 ];
 
 // ==============================
-// MESSAGE HANDLER
+// HANDLE MESSAGES
 // ==============================
 async function handleMessage(msg, sock) {
-  try {
-    if (!msg.message) return;
+  if (!msg.message) return;
 
-    const body =
-      msg.message?.conversation ||
-      msg.message?.extendedTextMessage?.text ||
-      msg.message?.imageMessage?.caption ||
-      "";
-    const text = body.toLowerCase().trim();
-    const remoteJid = msg.key.remoteJid;
-    const isGroup = remoteJid.endsWith('@g.us');
-    const sender = msg.key.participant || remoteJid;
-    const isImage = !!msg.message?.imageMessage;
+  const body =
+    msg.message.conversation ||
+    msg.message.extendedTextMessage?.text ||
+    msg.message.imageMessage?.caption ||
+    "";
+  const text = body.toLowerCase().trim();
+  const remoteJid = msg.key.remoteJid;
+  const sender = msg.key.participant || remoteJid;
+  const isImage = !!msg.message.imageMessage;
+  const isOwner = sender === OWNER_NUMBER;
 
-    const businessKeywords = ['pay', 'account', 'rate', 'tr', 'track', 'paid', 'proof', 'alert', 'done', '.menu', 'help', 'menu'];
+  // ==============================
+  // GREETING
+  // ==============================
+  if (GREETINGS.includes(text)) {
+    return await sock.sendMessage(remoteJid, {
+      text: `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Please state your name and how we can help you.\n\nType *.menu* for all commands. And .help for guidance`
+    });
+  }
 
-    // ==============================
-    // IGNORE GROUPS unless whitelisted
-    // ==============================
-    const allowedGroups = (process.env.ALLOWED_GROUPS || "").split(",");
-    if (isGroup && !allowedGroups.includes(remoteJid)) return;
+  // ==============================
+  // COMMANDS
+  // ==============================
+  if (text === '.menu' || text === 'menu') {
+    let menuMsg = `*🛠️ ${BUSINESS_NAME} Assistant*\n\n`;
+    menuMsg += `*💰 FINANCE*\n• .pay - Bank info\n• .rate - Currency / Crypto Rates\n\n`;
+    menuMsg += `*🛒 PRODUCTS*\n• .add [name] [type] [file] [price] - Add product (Owner only)\n`;
+    menuMsg += `• .get [name] [minPrice] [maxPrice] - Get products\n`;
+    menuMsg += `• .delete [id] - Delete product (Owner only)\n`;
+    menuMsg += `• .update [id] [field] [value] - Update product (Owner only)\n\n`;
+    menuMsg += `*ℹ️ HELP*\n• .help - Guidance & Commands`;
+    return await sock.sendMessage(remoteJid, { text: menuMsg });
+  }
 
-    // ==============================
-    // SYSTEM ACTIVE MESSAGE (first text)
-    // ==============================
-    if (text.length > 0 && greetings.includes(text)) {
-      await sock.sendMessage(remoteJid, {
-        text: `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Please state your name and how we can help you.\n\nType *.menu* for all commands.`
-      });
-      return;
-    }
+  if (text === '.help' || text === 'help') {
+    let helpMsg = `*🆘 HELP*\n\n`;
+    helpMsg += `• Greetings: hi, hello, hey, etc.\n`;
+    helpMsg += `• Products: .add, .get, .delete, .update\n`;
+    helpMsg += `• Currency & Crypto Rates: .rate\n`;
+    helpMsg += `• Bank Info: .pay\n`;
+    return await sock.sendMessage(remoteJid, { text: helpMsg });
+  }
 
-    // ==============================
-    // GREETINGS (worldwide)
-    // ==============================
-    if (greetings.includes(text)) {
-      await sock.sendMessage(remoteJid, {
-        text: `🟢 Bot active\n\nType *.menu* to see commands\nType *help* for assistance`
-      });
-      return;
-    }
+  // ==============================
+  // BANK INFO
+  // ==============================
+  if (text === '.pay') {
+    return await sock.sendMessage(remoteJid, {
+      text: `*💳 PAYMENT INFO*\n\n🏦 Bank: ${BANK_NAME}\n🔢 Acc: ${ACCOUNT_NUMBER}\n👤 Name: ${ACCOUNT_NAME}`
+    });
+  }
 
-    // ==============================
-    // COMMAND MENU (.menu)
-    // ==============================
-    if (['.menu', 'menu'].includes(text)) {
-      let menuMsg = `*🛠️ BUSINESS ASSISTANT v5.3*\n\n`;
-      menuMsg += `*💰 FINANCE*\n• \`.pay\` - Bank info\n• \`.rate\` - USD/NGN Rate\n\n`;
-      menuMsg += `*🌍 TOOLS*\n• \`.tr [lang] [text]\` - Translator (optional)\n• \`.track\` - Logistics\n\n`;
-      menuMsg += `*🛒 PRODUCTS*\n• \`.add [name] [type] [file] [price]\` - Add product\n• \`.get [name] [minPrice] [maxPrice]\` - Get products\n• \`.delete [id]\` - Delete product\n• \`.update [id] [field] [value]\` - Update product\n\n`;
-      menuMsg += `_Reliability first. We no go carry last!_`;
-      return await sock.sendMessage(remoteJid, { text: menuMsg });
-    }
+  // ==============================
+  // MULTI-CURRENCY / CRYPTO RATE
+  // ==============================
+  if (text.startsWith('.rate')) {
+    const args = body.split(' ');
+    if (args.length < 2) return await sock.sendMessage(remoteJid, {
+      text: "Usage: .rate [CURRENCY_CODE or CRYPTO] e.g. USD, EUR, BTC"
+    });
 
-    // ==============================
-    // HELP MENU (help)
-    // ==============================
-    if (text === 'help') {
-      let helpMsg = `*🆘 BOT HELP v5.3*\n\n`;
-      helpMsg += `• Type *.menu* to see main commands\n`;
-      helpMsg += `• Products: use .add to save items, .get to retrieve them\n`;
-      helpMsg += `• Use .delete [id] to remove a product, .update [id] [field] [value] to edit\n`;
-      helpMsg += `• Finance: .pay for bank info, .rate for USD/NGN rate\n`;
-      helpMsg += `• Tools: .tr [lang] [text] for translation (optional), .track for logistics\n`;
-      return await sock.sendMessage(remoteJid, { text: helpMsg });
-    }
+    const currency = args[1].toUpperCase();
+    let rate = getRate(currency);
 
-    // ==============================
-    // BANK ACCOUNT INFO (.pay / .account)
-    // ==============================
-    if (['.pay', '.account'].includes(text)) {
-      const payMsg = `*💳 PAYMENT INFO*\n\n🏦 Bank: [BANK NAME]\n🔢 Acc: [NUMBER]\n👤 Name: [NAME]`;
-      return await sock.sendMessage(remoteJid, { text: payMsg });
-    }
-
-    // ==============================
-    // DOLLAR RATE (.rate)
-    // ==============================
-    if (text === '.rate') {
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-      const data = await response.json();
-      const rate = (data.rates.NGN + 250).toFixed(2); // add your margin
-      return await sock.sendMessage(remoteJid, { text: `*📊 CURRENT RATE*\n\n1 USD = ₦${rate}` });
-    }
-
-    // ==============================
-    // ADD PRODUCT (.add)
-    // ==============================
-    if (text.startsWith('.add')) {
-      const args = body.split(' ');
-      if (args.length < 5) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .add [name] [type:image|video] [filePath] [price]" });
-      const [_, name, type, file, priceStr] = args;
-      const price = parseInt(priceStr);
-      addProduct(name, type, file, price);
-      return await sock.sendMessage(remoteJid, { text: `✅ Product ${name} added successfully!` });
-    }
-
-    // ==============================
-    // GET PRODUCT (.get)
-    // ==============================
-    if (text.startsWith('.get')) {
-      const args = body.split(' ');
-      if (args.length < 2) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .get [name] [minPrice] [maxPrice]" });
-      const name = args[1];
-      const minPrice = args[2] ? parseInt(args[2]) : 0;
-      const maxPrice = args[3] ? parseInt(args[3]) : Infinity;
-
-      const items = getProduct(name, minPrice, maxPrice);
-      if (items.length === 0) return await sock.sendMessage(remoteJid, { text: `❌ No ${name} found in that price range.` });
-
-      for (const item of items) {
-        if (item.type === 'image') await sock.sendMessage(remoteJid, { image: { url: item.file }, caption: `${name} - ₦${item.price}` });
-        if (item.type === 'video') await sock.sendMessage(remoteJid, { video: { url: item.file }, caption: `${name} - ₦${item.price}` });
+    if (!rate) {
+      try {
+        // Fiat currencies
+        if (currency !== 'BTC' && currency !== 'ETH') {
+          const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+          const data = await res.json();
+          rate = data.rates[currency];
+        } else {
+          // Crypto
+          const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${currency.toLowerCase()}&vs_currencies=usd`);
+          const data = await res.json();
+          rate = data[currency.toLowerCase()].usd;
+        }
+        if (rate) saveRate(currency, rate);
+      } catch (e) {
+        return await sock.sendMessage(remoteJid, { text: "Error fetching rate. Try again later." });
       }
-      return;
     }
 
-    // ==============================
-    // DELETE PRODUCT (.delete)
-    // ==============================
-    if (text.startsWith('.delete')) {
-      const args = body.split(' ');
-      if (args.length < 2) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .delete [id]" });
-      const success = deleteProduct(args[1]);
-      return await sock.sendMessage(remoteJid, { text: success ? `✅ Product deleted successfully!` : `❌ Product not found.` });
-    }
+    return await sock.sendMessage(remoteJid, {
+      text: `*📊 CURRENT RATE*\n1 ${currency} = $${rate}`
+    });
+  }
 
-    // ==============================
-    // UPDATE PRODUCT (.update)
-    // ==============================
-    if (text.startsWith('.update')) {
-      const args = body.split(' ');
-      if (args.length < 4) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .update [id] [field] [value]" });
-      const success = updateProduct(args[1], args[2], args.slice(3).join(' '));
-      return await sock.sendMessage(remoteJid, { text: success ? `✅ Product updated successfully!` : `❌ Product not found.` });
-    }
+  // ==============================
+  // PRODUCT MANAGEMENT
+  // ==============================
+  if (text.startsWith('.add') && isOwner) {
+    const args = body.split(' ');
+    if (args.length < 5) return await sock.sendMessage(remoteJid, { text: "Usage: .add [name] [type:image|video] [filePath] [price]" });
+    const [_, name, type, file, priceStr] = args;
+    const price = parseInt(priceStr);
+    addProduct(name, type, file, price);
+    return await sock.sendMessage(remoteJid, { text: `✅ Product ${name} added successfully!` });
+  }
 
-  } catch (err) {
-    console.error("Handler Error:", err);
+  if (text.startsWith('.get')) {
+    const args = body.split(' ');
+    if (args.length < 2) return await sock.sendMessage(remoteJid, { text: "Usage: .get [name] [minPrice] [maxPrice]" });
+    const name = args[1];
+    const minPrice = args[2] ? parseInt(args[2]) : 0;
+    const maxPrice = args[3] ? parseInt(args[3]) : Infinity;
+    const items = getProduct(name, minPrice, maxPrice);
+    if (!items.length) return await sock.sendMessage(remoteJid, { text: `❌ No products found.` });
+
+    for (const item of items) {
+      if (item.type === 'image') await sock.sendMessage(remoteJid, { image: { url: item.file }, caption: `${item.name} - ₦${item.price}` });
+      if (item.type === 'video') await sock.sendMessage(remoteJid, { video: { url: item.file }, caption: `${item.name} - ₦${item.price}` });
+    }
+    return;
+  }
+
+  if (text.startsWith('.delete') && isOwner) {
+    const id = body.split(' ')[1];
+    if (!id) return await sock.sendMessage(remoteJid, { text: "Usage: .delete [id]" });
+    deleteProduct(id);
+    return await sock.sendMessage(remoteJid, { text: `✅ Product ${id} deleted!` });
+  }
+
+  if (text.startsWith('.update') && isOwner) {
+    const [_, id, field, ...valueArr] = body.split(' ');
+    const value = valueArr.join(' ');
+    if (!id || !field || !value) return await sock.sendMessage(remoteJid, { text: "Usage: .update [id] [field] [value]" });
+    const ok = updateProduct(id, field, value);
+    return await sock.sendMessage(remoteJid, { text: ok ? `✅ Product updated!` : `❌ Product not found.` });
   }
 }
 

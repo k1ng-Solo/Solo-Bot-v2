@@ -1,90 +1,89 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_FILE = path.join(__dirname, 'products.json');
+const PRODUCTS_FILE = path.join(__dirname, 'products.json');
+const RATES_FILE = path.join(__dirname, 'rates.json');
 
 // ==============================
-// HELPER: Load products from JSON
+// HELPER: Load JSON
 // ==============================
-function loadProducts() {
+function loadJson(file) {
   try {
-    if (!fs.existsSync(DATA_FILE)) {
-      fs.writeFileSync(DATA_FILE, JSON.stringify([])); // create file if missing
-      return [];
-    }
-    const raw = fs.readFileSync(DATA_FILE);
-    return JSON.parse(raw);
+    if (!fs.existsSync(file)) return [];
+    return JSON.parse(fs.readFileSync(file));
   } catch (e) {
-    console.error("Error loading products:", e);
+    console.error(`Error loading ${file}:`, e);
     return [];
   }
 }
 
 // ==============================
-// HELPER: Save products to JSON
+// HELPER: Save JSON
 // ==============================
-function saveProducts(products) {
+function saveJson(file, data) {
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(products, null, 2));
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
   } catch (e) {
-    console.error("Error saving products:", e);
+    console.error(`Error saving ${file}:`, e);
   }
 }
 
 // ==============================
-// ADD PRODUCT
+// PRODUCT FUNCTIONS
 // ==============================
 function addProduct(name, type, file, price) {
-  if (!['image', 'video', 'file'].includes(type.toLowerCase())) {
-    type = 'file'; // default type if invalid
-  }
-  const products = loadProducts();
-  const id = Date.now() + Math.floor(Math.random() * 1000); // unique ID
-  const timestamp = new Date().toISOString();
-  products.push({ id, name, type, file, price, timestamp });
-  saveProducts(products);
-  return id;
+  const products = loadJson(PRODUCTS_FILE);
+  products.push({ id: Date.now(), name, type, file, price });
+  saveJson(PRODUCTS_FILE, products);
 }
 
-// ==============================
-// GET PRODUCTS (filter by name, price, optional type)
-// ==============================
-function getProduct(name, minPrice = 0, maxPrice = Infinity, type = null) {
-  const products = loadProducts();
+function getProduct(name, minPrice = 0, maxPrice = Infinity) {
+  const products = loadJson(PRODUCTS_FILE);
   return products.filter(p =>
     p.name.toLowerCase().includes(name.toLowerCase()) &&
-    p.price >= minPrice &&
-    p.price <= maxPrice &&
-    (type ? p.type === type.toLowerCase() : true)
+    p.price >= minPrice && p.price <= maxPrice
   );
 }
 
-// ==============================
-// DELETE PRODUCT (by ID)
-// ==============================
 function deleteProduct(id) {
-  let products = loadProducts();
-  const initialLength = products.length;
-  products = products.filter(p => p.id !== id);
-  saveProducts(products);
-  return products.length < initialLength; // true if deleted
+  let products = loadJson(PRODUCTS_FILE);
+  products = products.filter(p => p.id != id);
+  saveJson(PRODUCTS_FILE, products);
 }
 
-// ==============================
-// UPDATE PRODUCT (by ID)
-// ==============================
-function updateProduct(id, data = {}) {
-  const products = loadProducts();
-  let updated = false;
-  for (let p of products) {
-    if (p.id === id) {
-      Object.assign(p, data);
-      updated = true;
-      break;
-    }
+function updateProduct(id, field, value) {
+  const products = loadJson(PRODUCTS_FILE);
+  const idx = products.findIndex(p => p.id == id);
+  if (idx !== -1) {
+    products[idx][field] = value;
+    saveJson(PRODUCTS_FILE, products);
+    return true;
   }
-  if (updated) saveProducts(products);
-  return updated;
+  return false;
 }
 
-module.exports = { addProduct, getProduct, deleteProduct, updateProduct };
+// ==============================
+// RATES FUNCTIONS (cache)
+// ==============================
+function saveRate(currency, rate) {
+  const rates = loadJson(RATES_FILE);
+  const idx = rates.findIndex(r => r.currency === currency);
+  const entry = { currency, rate, timestamp: Date.now() };
+  if (idx !== -1) rates[idx] = entry;
+  else rates.push(entry);
+  saveJson(RATES_FILE, rates);
+}
+
+function getRate(currency) {
+  const rates = loadJson(RATES_FILE);
+  const entry = rates.find(r => r.currency === currency);
+  if (!entry) return null;
+  // use cached if < 60 min old
+  if (Date.now() - entry.timestamp < 60 * 60 * 1000) return entry.rate;
+  return null;
+}
+
+module.exports = {
+  addProduct, getProduct, deleteProduct, updateProduct,
+  saveRate, getRate
+};
