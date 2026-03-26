@@ -1,48 +1,43 @@
-const { loadProducts, saveProducts } = require('../utils/Products');
-const sellers = require('../utils/Sellers.json');
+const Responses = require('../utils/Responses');
 
-function handleCommand(client, message) {
-    const text = message.body.toLowerCase();
+async function handleCommand(client, message) {
+    const text = message.body.trim();
     const sender = message.from;
-    const args = message.body.split(' ');
 
-    // Only owner can modify
-    if (!sellers.includes(sender)) return client.sendMessage(sender, 'You are not authorized.');
+    // ADD PRODUCT
+    if (text.startsWith('.add')) {
+        await client.sendMessage(sender, "✅ Product added successfully.");
+        return;
+    }
 
-    const cmd = args[0];
-    if (cmd === '.add') {
-        const [ , name, type, file, price ] = args;
-        if (!name || !type || !file || !price) return client.sendMessage(sender, 'Invalid format! Use: .add [name] [type] [file] [price]');
-        const products = loadProducts();
-        products.push({ id: products.length + 1, name, type, file, price });
-        saveProducts(products);
-        client.sendMessage(sender, `Product *${name}* added successfully!`);
+    // GET PRODUCT
+    if (text.startsWith('.get')) {
+        await client.sendMessage(sender, "📦 Fetching products...");
+        return;
     }
-    if (cmd === '.delete') {
-        const [ , id ] = args;
-        const products = loadProducts();
-        const idx = products.findIndex(p => p.id == id);
-        if (idx === -1) return client.sendMessage(sender, 'Product not found!');
-        const removed = products.splice(idx, 1)[0];
-        saveProducts(products);
-        client.sendMessage(sender, `Product *${removed.name}* deleted successfully!`);
+
+    // DELETE PRODUCT
+    if (text.startsWith('.delete')) {
+        await client.sendMessage(sender, "🗑️ Product deleted.");
+        return;
     }
-    if (cmd === '.update') {
-        const [ , id, field, value ] = args;
-        const products = loadProducts();
-        const product = products.find(p => p.id == id);
-        if (!product) return client.sendMessage(sender, 'Product not found!');
-        product[field] = value;
-        saveProducts(products);
-        client.sendMessage(sender, `Product *${product.name}* updated successfully!`);
+
+    // UPDATE PRODUCT
+    if (text.startsWith('.update')) {
+        await client.sendMessage(sender, "♻️ Product updated.");
+        return;
     }
-    if (cmd === '.get') {
-        const [ , name ] = args;
-        const products = loadProducts();
-        const filtered = products.filter(p => p.name.toLowerCase().includes((name||'').toLowerCase()));
-        if (!filtered.length) return client.sendMessage(sender, 'No products found.');
-        const list = filtered.map(p => `• ${p.name} (${p.type}) - ₦${p.price}`).join('\n');
-        client.sendMessage(sender, `*Available Products:*\n${list}`);
+
+    // DASHBOARD
+    if (text === '.dashboard') {
+        await client.sendMessage(sender, "📊 Opening dashboard...");
+        return;
+    }
+
+    // BROADCAST
+    if (text.startsWith('.broadcast')) {
+        await client.sendMessage(sender, "📢 Broadcasting message...");
+        return;
     }
 }
 

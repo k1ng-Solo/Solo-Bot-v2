@@ -1,52 +1,90 @@
-const { loadProducts, saveProducts } = require('../utils/Products');
-const { loadMemory, saveMemory } = require('../utils/Memory');
-const { loadSellers } = require('../utils/Sellers.json');
-const Responses = require('../utils/Responses');
-const { createOrder, myOrders } = require('./OrderHandler');
+const fs = require('fs');
+const path = require('path');
 
-const greetings = ['hi','hello','hey','hwfr','hw fa','hw fr','how far','wassup','wagwan','hyd'];
+const Responses = require('../utils/Responses');
+const { handleCommand } = require('./CommandHandler');
+const { handleOrder } = require('/OrderHandler');
+const { loadMemory } = require('./utils/Memory');
+
+// Load sellers
+const sellersPath = path.join(__dirname, '../utils/Sellers.json');
+
+function loadSellers() {
+    if (!fs.existsSync(sellersPath)) return [];
+    return JSON.parse(fs.readFileSync(sellersPath));
+}
+
+const greetings = [
+    'hi','hello','hey','hwfr','hw fa','hw fr',
+    'how far','wassup','wagwan','hyd'
+];
 
 async function handleMessage(client, message) {
-    const text = message.body.toLowerCase();
-    const sender = message.from;
+    try {
+        const text = message.body.toLowerCase();
+        const sender = message.from;
 
-    // Only approved sellers/users
-    if (!loadSellers().includes(sender)) return;
+        const sellers = loadSellers();
 
-    // Greetings
-    if (greetings.includes(text)) {
-        client.sendMessage(sender, Responses.systemActive);
-        return;
-    }
+        // Only approved users
+        if (!sellers.includes(sender)) return;
 
-    // Commands
-    if (text.startsWith('.menu')) {
-        client.sendMessage(sender, Responses.menu);
-        return;
-    }
+        // Greetings
+        if (greetings.includes(text)) {
+            await client.sendMessage(sender, Responses.systemActive);
+            return;
+        }
 
-    if (text.startsWith('help') || text.startsWith('.help')) {
-        client.sendMessage(sender, Responses.help);
-        return;
-    }
+        // Menu
+        if (text === '.menu') {
+            await client.sendMessage(sender, Responses.menu);
+            return;
+        }
 
-    // Product & Order handling delegated
-    if (text.startsWith('.add') || text.startsWith('.get') || text.startsWith('.delete') || text.startsWith('.update')) {
-        require('./CommandHandler').handleCommand(client, message);
-        return;
-    }
+        // Help
+        if (text === 'help' || text === '.help') {
+            await client.sendMessage(sender, Responses.help);
+            return;
+        }
 
-    if (text.startsWith('.order') || text.startsWith('.myorders')) {
-        require('./OrderHandler').handleOrder(client, message);
-        return;
-    }
+        // Currency rate
+        if (text === '.rate') {
+            const memory = loadMemory();
+            const currencies = memory.currencies || [];
 
-    if (text.startsWith('.rate')) {
-        const memory = loadMemory();
-        const currencies = memory.currencies || [];
-        const list = currencies.map(c => `• ${c.name} (${c.symbol}): ${c.rate}`).join('\n');
-        client.sendMessage(sender, `*💱 Exchange Rates*\n\n${list}`);
-        return;
+            if (!currencies.length) {
+                await client.sendMessage(sender, "Rates not available yet.");
+                return;
+            }
+
+            const list = currencies
+                .map(c => `• ${c.name} (${c.symbol}): ${c.rate}`)
+                .join('\n');
+
+            await client.sendMessage(sender, `*💱 Exchange Rates*\n\n${list}`);
+            return;
+        }
+
+        // Commands
+        if (text.startsWith('.add') ||
+            text.startsWith('.get') ||
+            text.startsWith('.delete') ||
+            text.startsWith('.update')) {
+
+            await handleCommand(client, message);
+            return;
+        }
+
+        // Orders
+        if (text.startsWith('.order') ||
+            text.startsWith('.myorders')) {
+
+            await handleOrder(client, message);
+            return;
+        }
+
+    } catch (error) {
+        console.error("MessageHandler error:", error);
     }
 }
 
