@@ -1,8 +1,8 @@
 [
-  "USD",
-  "NGN",
-  "EUR",
-  "GBP",
-  "BTC",
-  "ETH"
+  { "code": "USD" },
+  { "code": "EUR" },
+  { "code": "GBP" },
+  { "code": "BTC" },
+  { "code": "ETH" },
+  { "code": "USDT" }
 ]
