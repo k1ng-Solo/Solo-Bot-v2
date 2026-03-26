@@ -1,117 +1,33 @@
-const config = require('../config/business');
-
-/**
- * Response Templates and Utilities
- */
-class ResponseHandler {
-  /**
-   * Check if message is a greeting
-   */
-  isGreeting(message) {
-    const lowerMsg = message.toLowerCase().trim();
-    return config.messages.greetings.some(greeting => 
-      lowerMsg.includes(greeting) || lowerMsg === greeting
-    );
-  }
-
-  /**
-   * Check if message is a number command (0, 1, 2, 3)
-   */
-  isCommand(message) {
-    return /^[0-3]$/.test(message.trim());
-  }
-
-  /**
-   * Get welcome message
-   */
-  getWelcomeMessage() {
-    return config.formatMessage(config.messages.welcome);
-  }
-
-  /**
-   * Get unknown command response
-   */
-  getUnknownResponse() {
-    return config.messages.unknown;
-  }
-
-  /**
-   * Get goodbye message
-   */
-  getGoodbyeMessage() {
-    return config.formatMessage(config.messages.goodbye);
-  }
-
-  /**
-   * Get services menu
-   */
-  getServicesMenu() {
-    return config.getServicesMenu();
-  }
-
-  /**
-   * Get contact info
-   */
-  getContactInfo() {
-    return config.getContactInfo();
-  }
-
-  /**
-   * Format order confirmation for customer
-   */
-  formatOrderConfirmation(customerName, customerNumber, orderData) {
-    return config.formatMessage(config.order.confirmationTemplate, {
-      customerName: customerName || 'Customer',
-      customerNumber: customerNumber,
-      items: orderData.items || 'Not specified',
-      pickupTime: orderData.pickup || 'Not specified',
-      notes: orderData.notes || 'None'
-    });
-  }
-
-  /**
-   * Get next order question based on current step
-   */
-  getOrderQuestion(step) {
-    const questions = config.order.questions;
-    if (step >= 0 && step < questions.length) {
-      return questions[step];
-    }
-    return null;
-  }
-
-  /**
-   * Format order summary for owner notification
-   */
-  formatOwnerNotification(customerNumber, customerName, orderData) {
-    const timestamp = new Date().toLocaleString();
+// Static messages & templates
+module.exports = {
+    systemActive: `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Please state your name and how we can help you.\n\nType *.menu* for all commands. And *help* for guidance.`,
     
-    const orderDetails = `
-Items: ${orderData.items || 'N/A'}
-Pickup: ${orderData.pickup || 'N/A'}
-Notes: ${orderData.notes || 'None'}
-    `.trim();
+    menu: `
+*🛠️ BUSINESS ASSISTANT v5.3*
 
-    return config.formatMessage(config.ownerNotifications.newOrder, {
-      customerNumber,
-      customerName: customerName || 'Unknown',
-      orderDetails,
-      timestamp
-    });
-  }
+*💰 FINANCE*
+• .pay - Bank info & auto payment
+• .rate - Currency & Crypto Rates
 
-  /**
-   * Format incoming message notification for owner
-   */
-  formatIncomingMessageNotification(customerNumber, message) {
-    const timestamp = new Date().toLocaleString();
-    
-    return config.formatMessage(config.ownerNotifications.customerQuery, {
-      customerNumber,
-      message,
-      timestamp
-    });
-  }
-}
+*🛒 PRODUCTS*
+• .add [name] [type] [file] [price] - Add product (owner only)
+• .get [name] [minPrice] [maxPrice] - Get products
+• .delete [id] - Delete product (owner only)
+• .update [id] [field] [value] - Update product (owner only)
 
-module.exports = new ResponseHandler();
+*📦 ORDERS*
+• .order [product_name] - Place an order
+• .myorders - View your orders
+
+Type *help* for assistance.
+`,
+
+    help: `
+*🆘 HELP v5.3*
+• Type *.menu* to see all commands
+• Finance: .pay for bank info & auto-payment, .rate for live currency & crypto
+• Products: .add, .get, .delete, .update (owner only)
+• Orders: .order, .myorders
+• Admin-only: .add, .delete, .update
+`
+};
