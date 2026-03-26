@@ -1,8 +1,14 @@
 [
-  { "code": "USD" },
-  { "code": "EUR" },
-  { "code": "GBP" },
-  { "code": "BTC" },
-  { "code": "ETH" },
-  { "code": "USDT" }
+  { "code": "USD", "rate": 1 },
+  { "code": "NGN", "rate": 770 },
+  { "code": "EUR", "rate": 0.92 },
+  { "code": "GBP", "rate": 0.81 },
+  { "code": "JPY", "rate": 135 },
+  { "code": "CAD", "rate": 1.36 },
+  { "code": "AUD", "rate": 1.49 },
+  { "code": "CHF", "rate": 0.92 },
+  { "code": "CNY", "rate": 7.13 },
+  { "code": "BTC", "rate": 0.000034 },
+  { "code": "ETH", "rate": 0.00048 },
+  { "code": "USDT", "rate": 1 }
 ]

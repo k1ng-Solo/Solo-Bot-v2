@@ -1,279 +1,130 @@
-const fetch = require("node-fetch");
-const { load, save } = require("../utils/memory");
+const { addProduct, updateProduct, deleteProduct, getProduct, loadCurrencies, refreshRates } = require('../utils/memory');
 
-const OWNER = (process.env.OWNER_NUMBER || "234XXXXXXXXXX") + "@s.whatsapp.net";
-
+// ==============================
+// GREETINGS
+// ==============================
 const greetings = [
-"hi","hello","hey","how far","hwfr","wagwan","wassup","hyd"
+  'hi','hello','hey','hwfr','hw fa','hw fr','how far','wassup','wagwan','hyd'
 ];
 
-async function handleMessage(msg,sock){
-
-try{
-
-if(!msg.message) return;
-
-const body =
-msg.message.conversation ||
-msg.message.extendedTextMessage?.text ||
-msg.message.imageMessage?.caption || "";
-
-const text = body.toLowerCase().trim();
-
-const remoteJid = msg.key.remoteJid;
-const sender = msg.key.participant || remoteJid;
-
-const isOwner = sender === OWNER;
-
-
-/* ---------------- GREETING ---------------- */
-
-if(greetings.includes(text)){
-return sock.sendMessage(remoteJid,{
-text:`*SYSTEM ACTIVE* 🟢
-
-Welcome to our business assistant.
-Type *.menu* to continue.`
-});
-}
-
-
-/* ---------------- MENU ---------------- */
-
-if(text === ".menu"){
-return sock.sendMessage(remoteJid,{
-text:`🛠 BUSINESS ASSISTANT
-
-User:
-.rate
-.order product
-.pay
-
-Admin:
-.dashboard
-.broadcast
-.confirm
-.reseller
-.affiliate`
-});
-}
-
-
-/* ---------------- LIVE CRYPTO ---------------- */
-
-if(text === ".rate"){
-
-const res = await fetch(
-"https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether&vs_currencies=ngn"
-);
-
-const data = await res.json();
-
-return sock.sendMessage(remoteJid,{
-text:`💱 Live Rates
-
-BTC: ₦${data.bitcoin.ngn}
-ETH: ₦${data.ethereum.ngn}
-USDT: ₦${data.tether.ngn}`
-});
-}
-
-
-/* ---------------- ORDER SYSTEM ---------------- */
-
-if(text.startsWith(".order")){
-
-const product = body.split(" ")[1];
-
-let orders = load("orders");
-
-const id = Date.now();
-
-orders.push({
-id,
-user: sender,
-product,
-status:"pending",
-paid:false
-});
-
-save("orders",orders);
-
-await sock.sendMessage(remoteJid,{
-text:`✅ Order created
-
-Order ID: ${id}
-
-Proceed to payment using *.pay*`
-});
-
-await sock.sendMessage(OWNER,{
-text:`📦 NEW ORDER
-
-ID: ${id}
-Product: ${product}
-User: ${sender}`
-});
-
-return;
-}
-
-
-/* ---------------- PAYMENT INFO ---------------- */
-
-if(text === ".pay"){
-return sock.sendMessage(remoteJid,{
-text:`💳 Payment Info
-
-Bank: Opay
-Name: ADAOBI JOY NSOFOR
-Acc: 7076642500
-
-Send payment proof.`
-});
-}
-
-
-/* ---------------- PAYMENT PROOF DETECTION ---------------- */
-
-if(msg.message.imageMessage){
-
-let orders = load("orders");
-
-const pending = orders.find(o=>o.user===sender && !o.paid);
-
-if(!pending) return;
-
-pending.status = "awaiting-confirmation";
-save("orders",orders);
-
-await sock.sendMessage(OWNER,{
-text:`💰 Payment Proof
-
-Order: ${pending.id}
-User: ${sender}`
-});
-
-await sock.sendMessage(OWNER,{
-image: msg.message.imageMessage
-});
-
-return;
-}
-
-
-/* ---------------- CONFIRM PAYMENT ---------------- */
-
-if(text.startsWith(".confirm") && isOwner){
-
-const id = body.split(" ")[1];
-
-let orders = load("orders");
-
-const order = orders.find(o=>o.id == id);
-
-if(!order) return;
-
-order.paid = true;
-order.status = "completed";
-
-save("orders",orders);
-
-await sock.sendMessage(order.user,{
-text:`✅ Payment confirmed
-
-Your order is being delivered.`
-});
-
-return;
-}
-
-
-/* ---------------- DASHBOARD ---------------- */
-
-if(text === ".dashboard" && isOwner){
-
-const orders = load("orders");
-
-return sock.sendMessage(remoteJid,{
-text:`📊 DASHBOARD
-
-Orders: ${orders.length}
-Paid: ${orders.filter(o=>o.paid).length}
-Pending: ${orders.filter(o=>!o.paid).length}`
-});
-}
-
-
-/* ---------------- BULK BROADCAST ---------------- */
-
-if(text.startsWith(".broadcast") && isOwner){
-
-const msgText = body.replace(".broadcast","");
-
-const users = load("users");
-
-for(const u of users){
-await sock.sendMessage(u,{ text: msgText });
-}
-
-return;
-}
-
-
-/* ---------------- RESELLER SYSTEM ---------------- */
-
-if(text.startsWith(".reseller") && isOwner){
-
-const number = body.split(" ")[1];
-
-let resellers = load("resellers");
-
-resellers.push(number+"@s.whatsapp.net");
-
-save("resellers",resellers);
-
-return sock.sendMessage(remoteJid,{
-text:"✅ Reseller added"
-});
-}
-
-
-/* ---------------- AFFILIATE SYSTEM ---------------- */
-
-if(text.startsWith(".affiliate") && isOwner){
-
-const number = body.split(" ")[1];
-
-let affiliates = load("affiliates");
-
-affiliates.push({
-user:number+"@s.whatsapp.net",
-commission:0
-});
-
-save("affiliates",affiliates);
-
-return sock.sendMessage(remoteJid,{
-text:"✅ Affiliate added"
-});
-}
-
-
-/* ---------------- AUTO SAVE USER ---------------- */
-
-let users = load("users");
-
-if(!users.includes(sender)){
-users.push(sender);
-save("users",users);
-}
-
-
-}catch(err){
-console.log("ERROR:",err);
-}
-
+// ==============================
+// MESSAGE HANDLER
+// ==============================
+async function handleMessage(msg, sock) {
+  if (!msg.message) return;
+  const body = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+  const text = body.toLowerCase().trim();
+  const remoteJid = msg.key.remoteJid;
+  const sender = msg.key.participant || remoteJid;
+  const isGroup = remoteJid.endsWith('@g.us');
+
+  // ==============================
+  // FIRST GREETING / SYSTEM ACTIVE
+  // ==============================
+  if (greetings.includes(text) || text === body) {
+    await sock.sendMessage(remoteJid, {
+      text: `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Please state your name and how we can help you.\n\nType *.menu* for all commands. And *help* for guidance.`
+    });
+    return;
+  }
+
+  // ==============================
+  // MENU
+  // ==============================
+  if (['.menu','menu'].includes(text)) {
+    const menu = `*🛠️ BUSINESS ASSISTANT v5.3*\n\n` +
+                 `*💰 FINANCE*\n• .pay - Bank info\n• .rate - Currency & Crypto Rates\n\n` +
+                 `*🛒 PRODUCTS*\n• .add [name] [type] [file] [price] - Add product (owner only)\n` +
+                 `• .get [name] [minPrice] [maxPrice] - Get products\n` +
+                 `• .delete [id] - Delete product (owner only)\n` +
+                 `• .update [id] [field] [value] - Update product (owner only)\n\n` +
+                 `Type *help* for guidance.`;
+    return await sock.sendMessage(remoteJid, { text: menu });
+  }
+
+  // ==============================
+  // HELP
+  // ==============================
+  if (text === 'help') {
+    const help = `*🆘 HELP MENU v5.3*\n\n` +
+                 `• Type *.menu* to see all commands\n` +
+                 `• Products: use .add, .get, .delete, .update\n` +
+                 `• Finance: .pay for bank info, .rate for currencies\n` +
+                 `• Owner-only commands: .add, .delete, .update`;
+    return await sock.sendMessage(remoteJid, { text: help });
+  }
+
+  // ==============================
+  // BANK INFO
+  // ==============================
+  if (['.pay','.account'].includes(text)) {
+    const bank = `*💳 PAYMENT INFO*\n\n🏦 Bank: [BANK NAME]\n🔢 Acc: [NUMBER]\n👤 Name: [NAME]`;
+    return await sock.sendMessage(remoteJid, { text: bank });
+  }
+
+  // ==============================
+  // CURRENCY & CRYPTO RATE
+  // ==============================
+  if (['.rate','rate'].includes(text)) {
+    const currencies = loadCurrencies();
+    if (!currencies || currencies.length === 0) return await sock.sendMessage(remoteJid, { text: '❌ No currency data available.' });
+
+    let msgText = '*💱 Exchange Rates*\n';
+    currencies.forEach(c => {
+      msgText += `• ${c.code}: ${c.rate}\n`;
+    });
+    return await sock.sendMessage(remoteJid, { text: msgText });
+  }
+
+  // ==============================
+  // PRODUCT MANAGEMENT
+  // ==============================
+  if (text.startsWith('.add')) {
+    const args = body.split(' ');
+    if (args.length < 5) return await sock.sendMessage(remoteJid, { text: '❌ Usage: .add [name] [type] [file] [price]' });
+    const [_, name, type, file, price] = args;
+    addProduct(name, type, file, parseInt(price));
+    return await sock.sendMessage(remoteJid, { text: `✅ Product ${name} added!` });
+  }
+
+  if (text.startsWith('.get')) {
+    const args = body.split(' ');
+    if (args.length < 2) return await sock.sendMessage(remoteJid, { text: '❌ Usage: .get [name] [minPrice] [maxPrice]' });
+    const name = args[1];
+    const minPrice = args[2] ? parseInt(args[2]) : 0;
+    const maxPrice = args[3] ? parseInt(args[3]) : Infinity;
+    const items = getProduct(name, minPrice, maxPrice);
+    if (!items || items.length === 0) return await sock.sendMessage(remoteJid, { text: `❌ No ${name} found.` });
+    for (const item of items) {
+      await sock.sendMessage(remoteJid, { 
+        text: `${item.name} - ₦${item.price}` 
+      });
+    }
+    return;
+  }
+
+  if (text.startsWith('.delete')) {
+    const args = body.split(' ');
+    if (args.length < 2) return await sock.sendMessage(remoteJid, { text: '❌ Usage: .delete [id]' });
+    const ok = deleteProduct(args[1]);
+    return await sock.sendMessage(remoteJid, { text: ok ? '✅ Deleted successfully' : '❌ Product not found' });
+  }
+
+  if (text.startsWith('.update')) {
+    const args = body.split(' ');
+    if (args.length < 4) return await sock.sendMessage(remoteJid, { text: '❌ Usage: .update [id] [field] [value]' });
+    const ok = updateProduct(args[1], args[2], args[3]);
+    return await sock.sendMessage(remoteJid, { text: ok ? '✅ Updated successfully' : '❌ Product not found' });
+  }
+
+  // ==============================
+  // AUTO PAYMENT PROMPT & ORDER SYSTEM
+  // ==============================
+  if (text.startsWith('.order')) {
+    // Example: prompt user to choose payment method
+    const reply = `🛒 Order received! Please reply with payment method:\n1️⃣ Bank Transfer\n2️⃣ USSD\n3️⃣ Online Payment`;
+    return await sock.sendMessage(remoteJid, { text: reply });
+  }
 }
 
 module.exports = { handleMessage };
