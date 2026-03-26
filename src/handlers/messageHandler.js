@@ -1,21 +1,13 @@
+const { addProduct, getProduct, deleteProduct, updateProduct, getCurrencies, addCurrency } = require('../utils/memory');
 const fetch = require('node-fetch');
-const { loadProducts, saveProducts, loadCurrencies, saveCurrencies } = require('../utils/memory');
 
 // ==============================
-// CONFIGURATION
+// GLOBAL CONFIG
 // ==============================
-const OWNER_NUMBER = process.env.OWNER_NUMBER; // must be set
-const greetings = [
-  "hi","hello","hey","hwfr","hw fa","hw fr","how far","wassup","wagwan","hyd",
-  "hola","bonjour","ciao","hallo","namaste","konichiwa","shalom","salaam","sawubona"
-];
+const OWNER = process.env.OWNER_NUMBER + '@s.whatsapp.net';
 
-// ==============================
-// HELPER: check owner
-// ==============================
-function isOwner(sender) {
-  return sender.includes(OWNER_NUMBER);
-}
+// Greetings worldwide
+const GREETINGS = ['hi','hello','hey','hwfr','hw fa','hw fr','how far','wassup','wagwan','hyd'];
 
 // ==============================
 // MESSAGE HANDLER
@@ -23,155 +15,109 @@ function isOwner(sender) {
 async function handleMessage(msg, sock) {
   try {
     if (!msg.message) return;
+
     const body =
-      msg.message?.conversation ||
-      msg.message?.extendedTextMessage?.text ||
-      msg.message?.imageMessage?.caption ||
-      "";
+      msg.message.conversation ||
+      msg.message.extendedTextMessage?.text ||
+      msg.message.imageMessage?.caption || "";
     const text = body.toLowerCase().trim();
     const remoteJid = msg.key.remoteJid;
     const sender = msg.key.participant || remoteJid;
     const isGroup = remoteJid.endsWith('@g.us');
-    const isImage = !!msg.message?.imageMessage;
+    const isImage = !!msg.message.imageMessage;
 
     // ==============================
-    // GREETINGS & SYSTEM ACTIVE
+    // FIRST MESSAGE / GREETING
     // ==============================
-    if (greetings.includes(text)) {
-      const sysMsg = `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Please state your name and how we can help you.\n\nType *.menu* for all commands. And *help* for guidance.`;
-      return await sock.sendMessage(remoteJid, { text: sysMsg });
+    if (GREETINGS.includes(text)) {
+      return await sock.sendMessage(remoteJid, {
+        text: `*SYSTEM ACTIVE* 🟢\n\nWelcome to our official business assistant. Please state your name and how we can help you.\n\nType *.menu* for all commands. And *help* for guidance.`
+      });
     }
 
     // ==============================
-    // COMMAND MENU (.menu)
+    // MAIN MENU
     // ==============================
     if (['.menu','menu'].includes(text)) {
-      const menuMsg = `*🛠️ BUSINESS ASSISTANT v5.4*\n\n` +
-        `*💰 FINANCE*\n• .pay - Bank info\n• .rate - Currencies / Crypto\n\n` +
-        `*🛒 PRODUCTS*\n• .add [name] [type:image|video] [file] [price] - Add product (owner only)\n` +
-        `• .get [name] [minPrice] [maxPrice] - Get products\n` +
-        `• .delete [id] - Delete product (owner only)\n` +
-        `• .update [id] [field] [value] - Update product (owner only)\n\n` +
-        `*🤖 GENERAL*\n• Just greet or type your message for interaction\n\n` +
-        `_Reliability first. We no go carry last!_`;
+      let menuMsg = `*🛠️ BUSINESS ASSISTANT v5.3*\n\n`;
+      menuMsg += `*💰 FINANCE*\n• .pay - Bank info\n• .rate - Currency & Crypto Rates\n\n`;
+      menuMsg += `*🛒 PRODUCTS*\n• .add [name] [type] [file] [price] - Add product (owner only)\n`;
+      menuMsg += `• .get [name] [minPrice] [maxPrice] - Get products\n`;
+      menuMsg += `• .delete [id] - Delete product (owner only)\n`;
+      menuMsg += `• .update [id] [field] [value] - Update product (owner only)\n\n`;
+      menuMsg += `Type *help* for guidance.`;
       return await sock.sendMessage(remoteJid, { text: menuMsg });
     }
 
     // ==============================
-    // HELP MENU
+    // HELP
     // ==============================
     if (text === 'help') {
-      const helpMsg = `*🆘 BOT HELP v5.4*\n\n` +
-        `• Type *.menu* to see main commands\n` +
-        `• Products: .add, .get, .delete, .update\n` +
-        `• Bank info: .pay\n` +
-        `• Currencies & crypto: .rate [symbol]\n` +
-        `• Just greet to activate system message\n` +
-        `_Owner-only functions are restricted to the business owner_`;
+      let helpMsg = `*🆘 HELP MENU v5.3*\n\n`;
+      helpMsg += `• Type *.menu* to see all commands\n`;
+      helpMsg += `• Products: use .add, .get, .delete, .update\n`;
+      helpMsg += `• Finance: .pay for bank info, .rate for currencies\n`;
+      helpMsg += `• Owner-only commands: .add, .delete, .update\n`;
+      helpMsg += `• Greetings: ${GREETINGS.join(', ')}\n`;
       return await sock.sendMessage(remoteJid, { text: helpMsg });
     }
 
     // ==============================
-    // BANK INFO
+    // OWNER-ONLY CHECK
     // ==============================
-    if (['.pay','.account'].includes(text)) {
-      const payMsg = `*💳 PAYMENT INFO*\n\n🏦 Bank: [BANK NAME]\n🔢 Acc: [NUMBER]\n👤 Name: [NAME]`;
-      return await sock.sendMessage(remoteJid, { text: payMsg });
-    }
+    const isOwner = sender === OWNER;
 
     // ==============================
-    // RATE / CURRENCIES
-    // ==============================
-    if (text.startsWith('.rate')) {
-      let args = body.split(' ');
-      let currencies = loadCurrencies();
-
-      // Just ".rate" -> show list
-      if (args.length === 1) {
-        const msgText = `*💱 AVAILABLE CURRENCIES / CRYPTO*\n\n${currencies.join(", ")}\n\nType a currency symbol after .rate to get live rate.`;
-        return await sock.sendMessage(remoteJid, { text: msgText });
-      }
-
-      // ".rate USD" -> fetch live rate
-      const symbol = args[1].toUpperCase();
-      if (!currencies.includes(symbol)) {
-        currencies.push(symbol);
-        saveCurrencies(currencies); // auto-learn new currency
-      }
-
-      try {
-        let rate;
-        if (["BTC","ETH"].includes(symbol)) {
-          // fetch crypto price from coingecko
-          const resp = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${symbol.toLowerCase()}&vs_currencies=ngn`);
-          const data = await resp.json();
-          rate = data[symbol.toLowerCase()]?.ngn;
-        } else {
-          // fetch currency exchange rate USD -> symbol
-          const resp = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=${symbol}`);
-          const data = await resp.json();
-          rate = data.rates[symbol];
-        }
-        if (!rate) throw new Error("Rate not found");
-        return await sock.sendMessage(remoteJid, { text: `*💱 RATE*\n\n1 ${symbol} = ₦${(rate * 800).toFixed(2)} approx` });
-      } catch (e) {
-        return await sock.sendMessage(remoteJid, { text: `❌ Could not fetch rate for ${symbol}.` });
-      }
-    }
-
-    // ==============================
-    // PRODUCT FUNCTIONS (owner-only for add/delete/update)
+    // PRODUCT COMMANDS
     // ==============================
     if (text.startsWith('.add')) {
-      if (!isOwner(sender)) return;
+      if (!isOwner) return sock.sendMessage(remoteJid, { text: '❌ Only owner can add products.' });
       const args = body.split(' ');
-      if (args.length < 5) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .add [name] [type] [file] [price]" });
+      if (args.length < 5) return sock.sendMessage(remoteJid, { text: "❌ Usage: .add [name] [type] [file] [price]" });
       const [_, name, type, file, priceStr] = args;
-      const price = parseInt(priceStr);
-      const products = loadProducts();
-      products.push({ id: Date.now(), name, type, file, price });
-      saveProducts(products);
-      return await sock.sendMessage(remoteJid, { text: `✅ Product ${name} added successfully!` });
+      addProduct(name, type, file, parseInt(priceStr));
+      return sock.sendMessage(remoteJid, { text: `✅ Product "${name}" added.` });
     }
 
     if (text.startsWith('.get')) {
       const args = body.split(' ');
-      if (args.length < 2) return await sock.sendMessage(remoteJid, { text: "❌ Usage: .get [name] [minPrice] [maxPrice]" });
-      const name = args[1].toLowerCase();
-      const minPrice = args[2] ? parseInt(args[2]) : 0;
-      const maxPrice = args[3] ? parseInt(args[3]) : Infinity;
-      const products = loadProducts().filter(p => p.name.toLowerCase().includes(name) && p.price >= minPrice && p.price <= maxPrice);
-      if (!products.length) return await sock.sendMessage(remoteJid, { text: `❌ No ${name} found.` });
-
-      for (const p of products) {
-        if (p.type === 'image') await sock.sendMessage(remoteJid, { image: { url: p.file }, caption: `${p.name} - ₦${p.price}` });
-        if (p.type === 'video') await sock.sendMessage(remoteJid, { video: { url: p.file }, caption: `${p.name} - ₦${p.price}` });
+      if (args.length < 2) return sock.sendMessage(remoteJid, { text: "❌ Usage: .get [name] [minPrice] [maxPrice]" });
+      const name = args[1];
+      const min = args[2] ? parseInt(args[2]) : 0;
+      const max = args[3] ? parseInt(args[3]) : Infinity;
+      const items = getProduct(name, min, max);
+      if (!items.length) return sock.sendMessage(remoteJid, { text: `❌ No "${name}" found.` });
+      for (const item of items) {
+        if (item.type === 'image') await sock.sendMessage(remoteJid, { image: { url: item.file }, caption: `${item.name} - ₦${item.price}` });
+        if (item.type === 'video') await sock.sendMessage(remoteJid, { video: { url: item.file }, caption: `${item.name} - ₦${item.price}` });
       }
       return;
     }
 
     if (text.startsWith('.delete')) {
-      if (!isOwner(sender)) return;
-      const args = body.split(' ');
-      const id = parseInt(args[1]);
-      let products = loadProducts();
-      products = products.filter(p => p.id !== id);
-      saveProducts(products);
-      return await sock.sendMessage(remoteJid, { text: `✅ Product ID ${id} deleted.` });
+      if (!isOwner) return sock.sendMessage(remoteJid, { text: '❌ Only owner can delete products.' });
+      const id = body.split(' ')[1];
+      deleteProduct(id);
+      return sock.sendMessage(remoteJid, { text: `✅ Product deleted.` });
     }
 
     if (text.startsWith('.update')) {
-      if (!isOwner(sender)) return;
-      const args = body.split(' ');
-      const id = parseInt(args[1]);
-      const field = args[2];
-      const value = args.slice(3).join(' ');
-      const products = loadProducts();
-      const product = products.find(p => p.id === id);
-      if (!product) return await sock.sendMessage(remoteJid, { text: `❌ Product ID ${id} not found.` });
-      product[field] = field === 'price' ? parseInt(value) : value;
-      saveProducts(products);
-      return await sock.sendMessage(remoteJid, { text: `✅ Product ID ${id} updated.` });
+      if (!isOwner) return sock.sendMessage(remoteJid, { text: '❌ Only owner can update products.' });
+      const [_, id, field, ...rest] = body.split(' ');
+      updateProduct(id, field, rest.join(' '));
+      return sock.sendMessage(remoteJid, { text: `✅ Product updated.` });
+    }
+
+    // ==============================
+    // CURRENCY / RATE
+    // ==============================
+    if (text === '.rate') {
+      const currencies = getCurrencies();
+      if (!currencies.length) return sock.sendMessage(remoteJid, { text: 'No currencies found yet.' });
+
+      let msg = '*💱 Exchange Rates*\n';
+      currencies.forEach(c => msg += `• ${c.code}: ${c.rate}\n`);
+      return sock.sendMessage(remoteJid, { text: msg });
     }
 
   } catch (err) {
