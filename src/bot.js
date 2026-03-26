@@ -1,5 +1,5 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const { handleMessage } = require('./handler/MessageHandler');
+const { handleMessage } = require('/handler/MessageHandler');
 const SessionManager = require('./utils/SessionManager');
 
 const client = new Client({
