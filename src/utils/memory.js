@@ -1,103 +1,41 @@
 const fs = require('fs');
 const path = require('path');
 
-// ==============================
-// FILE PATHS
-// ==============================
 const PRODUCTS_FILE = path.join(__dirname, 'products.json');
 const CURRENCIES_FILE = path.join(__dirname, 'currencies.json');
 
-// ==============================
-// HELPER: Read JSON safely
-// ==============================
-function readJSON(filePath) {
+// Generic JSON loader (auto-creates file if missing)
+function loadJSON(file, defaultData = []) {
   try {
-    if (!fs.existsSync(filePath)) return [];
-    const raw = fs.readFileSync(filePath, 'utf-8');
+    if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify(defaultData, null, 2));
+    const raw = fs.readFileSync(file);
     return JSON.parse(raw);
-  } catch (err) {
-    console.error(`Error reading ${filePath}:`, err);
-    return [];
+  } catch (e) {
+    console.error("Error loading JSON:", e);
+    return defaultData;
   }
 }
 
-// ==============================
-// HELPER: Write JSON safely
-// ==============================
-function writeJSON(filePath, data) {
+// Generic JSON saver
+function saveJSON(file, data) {
   try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error(`Error writing ${filePath}:`, err);
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error("Error saving JSON:", e);
   }
 }
 
-// ==============================
-// PRODUCT FUNCTIONS
-// ==============================
-function addProduct(name, type, file, price) {
-  const products = readJSON(PRODUCTS_FILE);
-  const id = products.length ? products[products.length - 1].id + 1 : 1;
-  products.push({ id, name, type, file, price });
-  writeJSON(PRODUCTS_FILE, products);
-}
+// Products
+function loadProducts() { return loadJSON(PRODUCTS_FILE); }
+function saveProducts(products) { saveJSON(PRODUCTS_FILE, products); }
 
-function getProduct(name = '', minPrice = 0, maxPrice = Infinity) {
-  const products = readJSON(PRODUCTS_FILE);
-  return products.filter(p =>
-    p.name.toLowerCase().includes(name.toLowerCase()) &&
-    p.price >= minPrice &&
-    p.price <= maxPrice
-  );
-}
-
-function deleteProduct(id) {
-  let products = readJSON(PRODUCTS_FILE);
-  products = products.filter(p => p.id != id);
-  writeJSON(PRODUCTS_FILE, products);
-}
-
-function updateProduct(id, field, value) {
-  const products = readJSON(PRODUCTS_FILE);
-  const index = products.findIndex(p => p.id == id);
-  if (index === -1) return;
-  products[index][field] = field === 'price' ? parseInt(value) : value;
-  writeJSON(PRODUCTS_FILE, products);
-}
-
-// ==============================
-// CURRENCY / CRYPTO FUNCTIONS
-// ==============================
-function getCurrencies() {
-  return readJSON(CURRENCIES_FILE);
-}
-
-function addCurrency(code, rate) {
-  const currencies = readJSON(CURRENCIES_FILE);
-  const existing = currencies.find(c => c.code === code);
-  if (!existing) {
-    currencies.push({ code, lastRate: rate });
-    writeJSON(CURRENCIES_FILE, currencies);
-  }
-}
-
-function updateCurrency(code, rate) {
-  const currencies = readJSON(CURRENCIES_FILE);
-  const index = currencies.findIndex(c => c.code === code);
-  if (index !== -1) {
-    currencies[index].lastRate = rate;
-    writeJSON(CURRENCIES_FILE, currencies);
-  } else {
-    addCurrency(code, rate);
-  }
-}
+// Currencies / Crypto
+function loadCurrencies() { return loadJSON(CURRENCIES_FILE, ["USD","NGN","EUR","GBP","BTC","ETH"]); }
+function saveCurrencies(currencies) { saveJSON(CURRENCIES_FILE, currencies); }
 
 module.exports = {
-  addProduct,
-  getProduct,
-  deleteProduct,
-  updateProduct,
-  getCurrencies,
-  addCurrency,
-  updateCurrency
+  loadProducts,
+  saveProducts,
+  loadCurrencies,
+  saveCurrencies
 };
