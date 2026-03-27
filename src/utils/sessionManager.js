@@ -1,4 +1,4 @@
-const sellers = require("./Sellers.json")
+const sellers = require("./sellers.json")
 
 module.exports = {
     isApproved(number){

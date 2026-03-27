@@ -1,4 +1,4 @@
-const sellers = require("../utils/Sellers.json")
+const sellers = require("../utils/sellers.json")
 
 module.exports = {
     broadcastUpdates(sock){

@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const Memory = require("../utils/memory");
 const Products = require("../utils/products");
-const Sellers = require("../utils/Sellers.json");
+const Sellers = require("../utils/sellers.json");
 const Orders = require("../utils/Orders.json");
 const NotificationService = require("../services/notificationService");
 
