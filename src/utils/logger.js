@@ -1,6 +1,5 @@
-// Simple logging
-function log(message) {
-    console.log(`[LOG] ${new Date().toISOString()}: ${message}`);
+module.exports = {
+    log(message){
+        console.log("[BOT]", message)
+    }
 }
-
-module.exports = { log };

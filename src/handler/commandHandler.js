@@ -1,44 +1,23 @@
-const Responses = require('../utils/Responses');
+const fs = require("fs")
+const path = require("path")
 
-async function handleCommand(client, message) {
-    const text = message.body.trim();
-    const sender = message.from;
+const sellersFile = path.join(__dirname,"../utils/Sellers.json")
 
-    // ADD PRODUCT
-    if (text.startsWith('.add')) {
-        await client.sendMessage(sender, "✅ Product added successfully.");
-        return;
+module.exports = {
+
+addSeller(number){
+    const sellers = JSON.parse(fs.readFileSync(sellersFile))
+
+    if(!sellers.includes(number)){
+        sellers.push(number)
+        fs.writeFileSync(sellersFile,JSON.stringify(sellers,null,2))
     }
+},
 
-    // GET PRODUCT
-    if (text.startsWith('.get')) {
-        await client.sendMessage(sender, "📦 Fetching products...");
-        return;
-    }
-
-    // DELETE PRODUCT
-    if (text.startsWith('.delete')) {
-        await client.sendMessage(sender, "🗑️ Product deleted.");
-        return;
-    }
-
-    // UPDATE PRODUCT
-    if (text.startsWith('.update')) {
-        await client.sendMessage(sender, "♻️ Product updated.");
-        return;
-    }
-
-    // DASHBOARD
-    if (text === '.dashboard') {
-        await client.sendMessage(sender, "📊 Opening dashboard...");
-        return;
-    }
-
-    // BROADCAST
-    if (text.startsWith('.broadcast')) {
-        await client.sendMessage(sender, "📢 Broadcasting message...");
-        return;
-    }
+removeSeller(number){
+    let sellers = JSON.parse(fs.readFileSync(sellersFile))
+    sellers = sellers.filter(n=>n!==number)
+    fs.writeFileSync(sellersFile,JSON.stringify(sellers,null,2))
 }
 
-module.exports = { handleCommand };
+}

@@ -1,19 +1,23 @@
-async function handleOrder(client, message) {
-    const text = message.body.trim();
-    const sender = message.from;
+const fs = require("fs")
+const path = require("path")
 
-    if (text.startsWith('.order')) {
-        await client.sendMessage(
-            sender,
-            "🛒 *ORDER RECEIVED*\n\nPlease proceed with payment using *.pay*"
-        );
-        return;
-    }
+const ordersFile = path.join(__dirname,"../utils/Orders.json")
 
-    if (text === '.myorders') {
-        await client.sendMessage(sender, "📦 You have no orders yet.");
-        return;
-    }
+module.exports = {
+
+create(sender,product){
+
+const orders = JSON.parse(fs.readFileSync(ordersFile))
+
+orders.push({
+buyer: sender,
+product,
+status:"pending",
+date: new Date()
+})
+
+fs.writeFileSync(ordersFile,JSON.stringify(orders,null,2))
+
 }
 
-module.exports = { handleOrder };
+}

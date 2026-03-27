@@ -1,20 +1,34 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const { handleMessage } = require('./handler/MessageHandler');
+const makeWASocket = require("@whiskeysockets/baileys").default
+const { useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys")
+const pino = require("pino")
 
-const client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+const { handleMessage } = require("./handler/MessageHandler")
+
+async function startBot(){
+
+    const { state, saveCreds } = await useMultiFileAuthState("./sessions")
+    const { version } = await fetchLatestBaileysVersion()
+
+    const sock = makeWASocket({
+        version,
+        auth: state,
+        logger: pino({level:"silent"}),
+        printQRInTerminal:false
+    })
+
+    // pairing code
+    if(!sock.authState.creds.registered){
+        const code = await sock.requestPairingCode(process.env.OWNER_NUMBER)
+        console.log("PAIRING CODE:", code)
     }
-});
 
-client.on('ready', () => {
-    console.log('✅ Bot is ready!');
-});
+    sock.ev.on("creds.update", saveCreds)
 
-client.on('message', async message => {
-    await handleMessage(client, message);
-});
+    sock.ev.on("messages.upsert", async ({messages})=>{
+        const msg = messages[0]
+        if(!msg.message) return
+        await handleMessage(sock,msg)
+    })
+}
 
-client.initialize();
+startBot()

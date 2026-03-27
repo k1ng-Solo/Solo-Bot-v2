@@ -1,35 +1,21 @@
 module.exports = {
-    systemActive:
-`*SYSTEM ACTIVE* 🟢
 
-Welcome to our business assistant.
-Type *.menu* to continue.`,
+intro:
+`👋 Welcome to our Business Assistant
+
+We help you:
+• Browse available products
+• Place orders
+• Get payment details
+
+If you need anything, just type .menu`,
 
 menu:
-`🛠 *BUSINESS ASSISTANT*
+`🛍️ BUSINESS MENU
 
-User:
-• .rate
-• .order
-• .pay
-
-Admin:
-• .dashboard
-• .broadcast
-• .confirm
-• .reseller
-• .affiliate`,
-
-help:
-`📘 *HELP GUIDE*
-
-Customers:
-• Use *.order* to buy
-• Use *.pay* for payment
-• Use *.rate* for crypto rates
-
-Owner:
-• .add product
-• .broadcast message
-• .dashboard view stats`
-};
+.menu
+.order
+.pay
+.rate
+.help`
+}
