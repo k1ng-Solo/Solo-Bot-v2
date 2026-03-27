@@ -9,7 +9,7 @@ const Orders = require("../utils/orders.json");
 const NotificationService = require("../services/notificationService");
 
 const greetings = [
-  "hi", "hello", "hey", "hwfr", "hw fa", "hw fr", "how far", "wassup", "wagwan", "hyd"
+  "hi", "hello", "hey", "hwfr", "hw fa", "hw fr", "how far", "wassup", "wagwan", "hyd", "hwfa"
 ];
 
 module.exports = async function handleMessage(client, message) {
