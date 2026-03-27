@@ -1,34 +1,29 @@
-const makeWASocket = require("@whiskeysockets/baileys").default
-const { useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys")
-const pino = require("pino")
+import makeWASocket, { useSingleFileAuthState } from "@whiskeysockets/baileys";
 
-const { handleMessage } = require("./handler/messageHandler")
+const { state, saveState } = useSingleFileAuthState('./session/auth_info.json');
 
-async function startBot(){
-
-    const { state, saveCreds } = await useMultiFileAuthState("./sessions")
-    const { version } = await fetchLatestBaileysVersion()
-
+async function startBot() {
     const sock = makeWASocket({
-        version,
-        auth: state,
-        logger: pino({level:"silent"}),
-        printQRInTerminal:false
-    })
+        auth: state
+    });
 
-    // pairing code
-    if(!sock.authState.creds.registered){
-        const code = await sock.requestPairingCode(process.env.OWNER_NUMBER)
-        console.log("PAIRING CODE:", code)
-    }
+    // Save auth updates automatically
+    sock.ev.on('creds.update', saveState);
 
-    sock.ev.on("creds.update", saveCreds)
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
 
-    sock.ev.on("messages.upsert", async ({messages})=>{
-        const msg = messages[0]
-        if(!msg.message) return
-        await handleMessage(sock,msg)
-    })
+        if (connection === 'open') {
+            console.log('✅ Bot connected!');
+        } else if (connection === 'close') {
+            console.log('❌ Connection closed');
+            if (lastDisconnect?.error?.output?.statusCode === 428) {
+                console.log('⚠️ Requesting pairing code...');
+                const pairing = await sock.requestPairingCode('web'); // 'web' for WhatsApp Web
+                console.log('🔑 Pairing code:', pairing);
+            }
+        }
+    });
 }
 
-startBot()
+startBot();
