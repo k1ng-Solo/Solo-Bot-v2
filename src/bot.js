@@ -2,7 +2,7 @@ const makeWASocket = require("@whiskeysockets/baileys").default
 const { useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys")
 const pino = require("pino")
 
-const { handleMessage } = require("./handler/MessageHandler")
+const { handleMessage } = require("./handler/messageHandler")
 
 async function startBot(){
 
