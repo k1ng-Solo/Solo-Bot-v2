@@ -1,28 +1,28 @@
-import makeWASocket, { useSingleFileAuthState } from "@whiskeysockets/baileys";
-
-const { state, saveState } = useSingleFileAuthState('./session/auth_info.json');
+import makeWASocket from '@whiskeysockets/baileys';
+import { useMultiFileAuthState } from '@whiskeysockets/baileys';
+import P from 'pino';
 
 async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('./session'); // your session folder
+
     const sock = makeWASocket({
+        logger: P({ level: 'silent' }),
+        printQRInTerminal: true, // remove if you want pairing code only
         auth: state
     });
 
-    // Save auth updates automatically
-    sock.ev.on('creds.update', saveState);
+    sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
-
-        if (connection === 'open') {
-            console.log('✅ Bot connected!');
-        } else if (connection === 'close') {
-            console.log('❌ Connection closed');
-            if (lastDisconnect?.error?.output?.statusCode === 428) {
-                console.log('⚠️ Requesting pairing code...');
-                const pairing = await sock.requestPairingCode('web'); // 'web' for WhatsApp Web
-                console.log('🔑 Pairing code:', pairing);
-            }
+    sock.ev.on('connection.update', (update) => {
+        console.log(update);
+        if (update.connection === 'close') {
+            console.log('Connection closed, restarting...');
+            startBot();
         }
+    });
+
+    sock.ev.on('messages.upsert', (m) => {
+        console.log(JSON.stringify(m, null, 2));
     });
 }
 
